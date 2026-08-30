@@ -14,11 +14,12 @@ import asyncio
 import logging
 from typing import Any
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     ClassDashAuthError,
@@ -44,17 +45,20 @@ STEP_USER_SCHEMA = vol.Schema(
 STEP_TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_TOKEN): str})
 
 
-async def _validate_token(host: str, port: int, cert_pem: str, token: str) -> None:
+async def _validate_token(
+    hass: HomeAssistant, host: str, port: int, cert_pem: str, token: str
+) -> None:
     """Raise ClassDashAuthError / ClassDashConnectionError if the token is bad."""
-    # A short-lived session, pinned to the certificate this flow already
-    # fetched — deliberately not hass's shared session, since this runs
-    # before there's any config entry for async_get_clientsession to key off.
+    # hass's shared session, same as __init__.py uses once the entry
+    # exists — nothing about it is entry-specific; the pinned SSL context
+    # is passed per-request instead, so there's no reason for the config
+    # flow to open its own separate session.
     ssl_context = await asyncio.get_running_loop().run_in_executor(
         None, build_ssl_context, cert_pem
     )
-    async with aiohttp.ClientSession() as session:
-        client = ClassDashClient(session, host, port, token, ssl_context)
-        await client.async_get_status()
+    session = async_get_clientsession(hass)
+    client = ClassDashClient(session, host, port, token, ssl_context)
+    await client.async_get_status()
 
 
 class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -100,7 +104,7 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
             token = user_input[CONF_TOKEN]
             try:
                 await _validate_token(
-                    self._host, self._port, self._cert_pem, token
+                    self.hass, self._host, self._port, self._cert_pem, token
                 )
             except ClassDashAuthError:
                 errors["base"] = "invalid_auth"
@@ -145,7 +149,7 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
             token = user_input[CONF_TOKEN]
             try:
                 await _validate_token(
-                    self._host, self._port, self._cert_pem, token
+                    self.hass, self._host, self._port, self._cert_pem, token
                 )
             except ClassDashAuthError:
                 errors["base"] = "invalid_auth"

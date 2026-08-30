@@ -8,9 +8,13 @@ A Home Assistant custom integration for [ClassDash](https://github.com/vemboy200
 home API — reads due/overdue/ahead assignments and class announcements into
 Home Assistant sensors. Read-only, same as the API it talks to.
 
-This is a personal companion project, not something aimed at Home Assistant
-core: it only makes sense for someone running ClassDash's home API on their
-own network.
+A personal companion project — it only makes sense for someone running
+ClassDash's home API on their own network — but with an eye toward
+eventually submitting it to Home Assistant core. Current progress against
+the [integration quality
+scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+is tracked in
+[`quality_scale.yaml`](custom_components/classdash/quality_scale.yaml).
 
 ## Requirements
 

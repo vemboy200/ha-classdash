@@ -26,6 +26,10 @@ from .coordinator import (
 )
 from .devices import class_device_info, class_unique_id
 
+# Every entity here reads from the shared coordinator's already-fetched
+# data — there's no per-entity network call for concurrency to matter to.
+PARALLEL_UPDATES = 0
+
 
 def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
     """Trim an assignment list down to what's worth showing as an attribute."""

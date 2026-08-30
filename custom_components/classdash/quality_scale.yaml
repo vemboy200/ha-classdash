@@ -1,0 +1,135 @@
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: No custom service actions — nothing to register.
+  appropriate-polling:
+    status: exempt
+    comment: local_push via /api/stream, no polling interval to set.
+  brands:
+    status: done
+    comment: |
+      icon/logo assets are in custom_components/classdash/brand/, ready to submit to
+      home-assistant/brands under custom_integrations/classdash/ — not yet actually
+      submitted there. The current assets are a placeholder pending real branding.
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency:
+    status: done
+    comment: No third-party requirements at all — stdlib (ssl/hashlib) plus aiohttp,
+      already a core dependency.
+  docs-actions:
+    status: exempt
+    comment: No custom service actions.
+  docs-conditions:
+    status: exempt
+    comment: No device conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions:
+    status: exempt
+    comment: Standard HA config entry removal via the UI; nothing custom to document.
+  docs-triggers:
+    status: exempt
+    comment: No device triggers.
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions:
+    status: exempt
+    comment: No custom service actions.
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow: done
+  test-coverage:
+    status: done
+    comment: 95% line coverage as of 2026-08-30 (pytest-cov), including the
+      certificate-pinning logic against a real throwaway TLS server and the
+      client's HTTP/SSE parsing against a real aiohttp test server — not just
+      mocked-away happy paths.
+
+  # Gold
+  devices: done
+  diagnostics:
+    status: todo
+    comment: Deliberately deferred — not essential for an initial submission.
+  discovery:
+    status: exempt
+    comment: No discovery protocol exists for an arbitrary LAN host:port; ClassDash's
+      home API has no mDNS/SSDP/zeroconf presence to discover.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery (see above).
+  docs-data-update: done
+  docs-examples:
+    status: todo
+    comment: No automation-example section in the README yet.
+  docs-known-limitations:
+    status: todo
+    comment: Real limitations exist (class identity is a name string with no
+      cross-platform ID, /api/classes only covers Google Classroom) but aren't
+      pulled into their own documented section yet.
+  docs-supported-devices:
+    status: exempt
+    comment: Not hardware-based — the "devices" here are per-class, discovered
+      dynamically from live data, not a fixed list to document.
+  docs-supported-functions: done
+  docs-troubleshooting:
+    status: todo
+    comment: No dedicated troubleshooting section yet.
+  docs-use-cases:
+    status: todo
+    comment: No dedicated use-cases section; the README's opening paragraph covers
+      the gist but not formally.
+  dynamic-devices: done
+  entity-category:
+    status: done
+    comment: No entity currently warrants a non-default category.
+  entity-device-class:
+    status: done
+    comment: last_collected uses SensorDeviceClass.TIMESTAMP; the count sensors have
+      no applicable device class.
+  entity-disabled-by-default:
+    status: done
+    comment: Nothing noisy or niche enough to warrant being disabled by default.
+  entity-translations: done
+  exception-translations:
+    status: exempt
+    comment: No HomeAssistantError currently raised from an entity or service call.
+  icon-translations:
+    status: todo
+    comment: Icons are hardcoded (_attr_icon / description icon=) rather than
+      declared in icons.json.
+  reconfiguration-flow:
+    status: todo
+    comment: Only reauth (token) exists; changing host/port requires removing and
+      re-adding the entry.
+  repair-issues:
+    status: exempt
+    comment: No actionable repair scenario currently identified.
+  stale-devices:
+    status: todo
+    comment: Deliberately additive-only right now — a class device persists even
+      with nothing currently due, rather than being removed and re-created as
+      things get assigned and turned in. See coordinator.py's class_names().
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: No third-party requirements; all I/O (aiohttp, asyncio) is async.
+  inject-websession: done
+  strict-typing:
+    status: todo
+    comment: No mypy strict configuration or py.typed marker present.

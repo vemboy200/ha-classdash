@@ -19,6 +19,10 @@ from homeassistant.util import dt as dt_util
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
 from .devices import class_device_info, class_unique_id
 
+# Same reasoning as sensor.py's PARALLEL_UPDATES: everything here reads
+# from the shared coordinator, nothing makes its own network call.
+PARALLEL_UPDATES = 0
+
 # A due date/time has no natural duration of its own — this just needs to
 # be long enough that end > start (CalendarEvent requires it) and that the
 # event is still findable as "current" for a little while after its due

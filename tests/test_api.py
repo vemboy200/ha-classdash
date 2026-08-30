@@ -12,12 +12,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+import socket
 import ssl
 import tempfile
 
 import pytest
 
 from custom_components.classdash.api import (
+    ClassDashConnectionError,
     build_ssl_context,
     fetch_server_certificate,
     fingerprint_from_der,
@@ -66,6 +68,19 @@ async def _tls_server(cert_pem: str, key_pem: str):
         server = await asyncio.start_server(handle, "127.0.0.1", 0, ssl=server_ctx)
         async with server:
             yield server.sockets[0].getsockname()[1]
+
+
+async def test_fetch_server_certificate_connection_refused(socket_enabled) -> None:
+    """Nothing listening on the port — should surface as our own
+    ClassDashConnectionError, not a bare OSError leaking out."""
+    with pytest.raises(ClassDashConnectionError):
+        # Port 0 asks the OS for an unused ephemeral port and then never
+        # listens on it, so the connection is refused deterministically.
+        unused_socket = socket.socket()
+        unused_socket.bind(("127.0.0.1", 0))
+        unused_port = unused_socket.getsockname()[1]
+        unused_socket.close()
+        await fetch_server_certificate("127.0.0.1", unused_port)
 
 
 async def test_fetch_and_pin_round_trip(cert_factory, socket_enabled) -> None:
