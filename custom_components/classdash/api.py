@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import ssl
+from collections.abc import AsyncIterator
 from typing import Any
 
 import aiohttp
@@ -122,16 +124,41 @@ class ClassDashClient:
             raise ClassDashConnectionError(str(err)) from err
 
     async def async_get_status(self) -> dict[str, Any]:
+        """A single quick round trip — used only to validate a token in the
+        config flow. Ongoing data comes from `async_stream_updates` instead."""
         return await self._get("/api/status")
 
-    async def async_get_due_soon(self) -> list[dict[str, Any]]:
-        return await self._get("/api/due-soon")
+    async def async_stream_updates(self) -> AsyncIterator[dict[str, Any]]:
+        """Connect to /api/stream and yield each bundled snapshot as it
+        arrives. ClassDash sends one immediately on connect, then again only
+        when a collection pass actually changed something — this generator
+        runs for as long as the connection lasts and yields once per event;
+        the caller is responsible for reconnecting when it ends.
 
-    async def async_get_ahead(self) -> list[dict[str, Any]]:
-        return await self._get("/api/ahead")
+        The connection has no read timeout: the server sends no heartbeat,
+        and a genuinely quiet stretch (nothing changed) can legitimately
+        last hours. A dead-but-unclosed connection is instead caught by the
+        caller's own reconnect loop noticing no data ever arrives.
+        """
+        try:
+            async with self._session.get(
+                f"{self._base}/api/stream",
+                headers={"Authorization": f"Bearer {self._token}"},
+                ssl=self._ssl_context,
+                timeout=aiohttp.ClientTimeout(total=None, sock_connect=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise ClassDashAuthError("missing or wrong bearer token")
+                resp.raise_for_status()
 
-    async def async_get_overdue(self) -> list[dict[str, Any]]:
-        return await self._get("/api/overdue")
-
-    async def async_get_announcements(self) -> list[dict[str, Any]]:
-        return await self._get("/api/announcements")
+                event_type: str | None = None
+                async for raw_line in resp.content:
+                    line = raw_line.decode("utf-8").rstrip("\n")
+                    if line.startswith("event:"):
+                        event_type = line[len("event:") :].strip()
+                    elif line.startswith("data:") and event_type == "update":
+                        yield json.loads(line[len("data:") :].strip())
+                    elif not line:
+                        event_type = None
+        except aiohttp.ClientError as err:
+            raise ClassDashConnectionError(str(err)) from err

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+import asyncio
+from unittest.mock import patch
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
+from custom_components.classdash.api import ClassDashAuthError
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -21,6 +23,13 @@ FAKE_STATUS = {
     "announcements": 4,
     "removed": 0,
     "language": "en",
+}
+FAKE_BUNDLE = {
+    "status": FAKE_STATUS,
+    "due-soon": [],
+    "ahead": [],
+    "overdue": [],
+    "announcements": [],
 }
 
 
@@ -37,6 +46,12 @@ def _make_entry(sample_certificate) -> MockConfigEntry:
     )
 
 
+async def _open_stream_stub():
+    """A stream that pushes one snapshot and then stays connected."""
+    yield FAKE_BUNDLE
+    await asyncio.Event().wait()
+
+
 async def test_setup_and_unload_entry(
     hass: HomeAssistant, sample_certificate
 ) -> None:
@@ -46,12 +61,7 @@ async def test_setup_and_unload_entry(
     with patch(
         "custom_components.classdash.ClassDashClient", autospec=True
     ) as mock_client_cls:
-        client = mock_client_cls.return_value
-        client.async_get_status = AsyncMock(return_value=FAKE_STATUS)
-        client.async_get_due_soon = AsyncMock(return_value=[])
-        client.async_get_ahead = AsyncMock(return_value=[])
-        client.async_get_overdue = AsyncMock(return_value=[])
-        client.async_get_announcements = AsyncMock(return_value=[])
+        mock_client_cls.return_value.async_stream_updates = _open_stream_stub
 
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -74,18 +84,23 @@ async def test_setup_and_unload_entry(
 async def test_setup_entry_triggers_reauth_on_bad_token(
     hass: HomeAssistant, sample_certificate
 ) -> None:
+    """A bad/expired token on the *very first* connection should fail setup
+    in a way Home Assistant recognizes as needing reauth."""
     entry = _make_entry(sample_certificate)
     entry.add_to_hass(hass)
 
-    from custom_components.classdash.api import ClassDashAuthError
+    async def failing_stream():
+        raise ClassDashAuthError("bad token")
+        yield  # pragma: no cover - unreachable, keeps this an async generator
 
     with patch(
         "custom_components.classdash.ClassDashClient", autospec=True
     ) as mock_client_cls:
-        mock_client_cls.return_value.async_get_status = AsyncMock(
-            side_effect=ClassDashAuthError("bad token")
-        )
+        mock_client_cls.return_value.async_stream_updates = failing_stream
+
         assert not await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.SETUP_ERROR
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert any(flow["context"].get("source") == "reauth" for flow in flows)

@@ -54,7 +54,13 @@ change, just the token.
 
 ## Entities
 
-One device ("ClassDash"), six sensors, polled every 5 minutes:
+One device ("ClassDash"), six sensors, updated by push — not polling.
+Home Assistant holds `/api/stream` open for as long as the entry is
+loaded; ClassDash sends the full current state the moment that connection
+opens, then again only when a collection pass actually changes something.
+If the connection drops, it's retried with backoff (5s up to 5 minutes);
+a brief blip doesn't touch the entities, but a longer outage marks them
+unavailable rather than silently going stale forever.
 
 | Entity | What it is |
 |---|---|
@@ -64,13 +70,6 @@ One device ("ClassDash"), six sensors, polled every 5 minutes:
 | Announcements | Count of recent teacher announcements, with a trimmed list attribute |
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
-
-## Not (yet) implemented
-
-ClassDash's home API also exposes `/api/stream` (Server-Sent Events) for
-push updates instead of polling. This integration polls for now — SSE
-would mean holding a long-lived connection and reacting to a push instead
-of a fixed interval, which is a real change in shape, not a small addition.
 
 ## License
 
