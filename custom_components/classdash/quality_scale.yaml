@@ -17,8 +17,13 @@ rules:
   config-flow-test-coverage: done
   dependency-transparency:
     status: done
-    comment: No third-party requirements at all — stdlib (ssl/hashlib) plus aiohttp,
-      already a core dependency.
+    comment: No third-party requirements at all right now — stdlib (ssl/hashlib) plus
+      aiohttp, already a core dependency. Note for later — if the API-client code in
+      api.py ever gets extracted into its own PyPI package (the pyowershades
+      pattern from this same author's powershades integration), *that* package
+      would need this rule satisfied properly (source published, ideally PyPI
+      Trusted Publishing) rather than trivially, the way pyowershades did before
+      its own core PR.
   docs-actions:
     status: exempt
     comment: No custom service actions.
