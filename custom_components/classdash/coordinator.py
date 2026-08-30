@@ -46,6 +46,22 @@ class ClassDashData:
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
 
 
+def class_names(data: ClassDashData) -> set[str]:
+    """Every distinct class name appearing anywhere in one snapshot.
+
+    This is the *only* source the sensor/calendar platforms use to decide
+    which per-class devices exist — deliberately not /api/classes, which
+    only covers Google Classroom and would silently miss every Canvas and
+    Edpuzzle class. A class with nothing currently due or announced won't
+    have a device yet; one is created the moment anything of its shows up.
+    """
+    return {
+        name
+        for item in (*data.due_soon, *data.ahead, *data.overdue, *data.announcements)
+        if (name := item.get("class"))
+    }
+
+
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
     """The stream's top-level keys are each REST handle's path with the
     leading /api/ stripped — so the list endpoints keep their hyphens

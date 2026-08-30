@@ -41,6 +41,9 @@
       "announcements": { "name": "Announcements" },
       "classes": { "name": "Classes" },
       "last_collected": { "name": "Last collected" }
+    },
+    "calendar": {
+      "assignments": { "name": "Assignments" }
     }
   }
 }

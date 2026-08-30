@@ -11,14 +11,20 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MAX_LIST_ATTRIBUTES
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, ClassDashData
+from .coordinator import (
+    ClassDashConfigEntry,
+    ClassDashCoordinator,
+    ClassDashData,
+    class_names,
+)
+from .devices import class_device_info, class_unique_id
 
 
 def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -115,6 +121,18 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
 )
 
 
+# The three per-class counts — one sensor each, on that class's own
+# sub-device. Reuses the main sensors' translation keys/icons: a
+# translation_key resolves per-domain, not per-device, so "due_soon" on a
+# class device still shows as "Due soon", combined with the device's own
+# name by has_entity_name.
+CLASS_SENSOR_ICONS = {
+    "due_soon": "mdi:book-clock",
+    "overdue": "mdi:book-alert",
+    "ahead": "mdi:book-clock-outline",
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ClassDashConfigEntry,
@@ -126,6 +144,29 @@ async def async_setup_entry(
         ClassDashSensor(coordinator, entry, description)
         for description in SENSOR_DESCRIPTIONS
     )
+
+    known_classes: set[str] = set()
+
+    @callback
+    def _add_new_class_sensors() -> None:
+        """Give any class that's shown up for the first time its three
+        count sensors. Classes only ever get added here, never removed —
+        see class_names' docstring for why a currently-empty class still
+        keeps its device rather than flickering in and out."""
+        if coordinator.data is None:
+            return
+        new = class_names(coordinator.data) - known_classes
+        if not new:
+            return
+        known_classes.update(new)
+        async_add_entities(
+            ClassDashClassSensor(coordinator, entry, name, key)
+            for name in sorted(new)
+            for key in CLASS_SENSOR_ICONS
+        )
+
+    _add_new_class_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_class_sensors))
 
 
 class ClassDashSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
@@ -159,3 +200,41 @@ class ClassDashSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
         if self.entity_description.attrs_fn is None:
             return None
         return self.entity_description.attrs_fn(self.coordinator.data)
+
+
+class ClassDashClassSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
+    """One class's own due-soon/overdue/ahead count, on its sub-device."""
+
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "assignments"
+    _attr_state_class = "measurement"
+
+    def __init__(
+        self,
+        coordinator: ClassDashCoordinator,
+        entry: ClassDashConfigEntry,
+        class_name: str,
+        key: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._class_name = class_name
+        self._key = key
+        self._attr_translation_key = key
+        self._attr_icon = CLASS_SENSOR_ICONS[key]
+        self._attr_unique_id = f"{class_unique_id(entry, class_name)}_{key}"
+        self._attr_device_info = class_device_info(entry, class_name)
+
+    def _items(self) -> list[dict[str, Any]]:
+        return [
+            x
+            for x in getattr(self.coordinator.data, self._key)
+            if x.get("class") == self._class_name
+        ]
+
+    @property
+    def native_value(self) -> int:
+        return len(self._items())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return _assignment_attrs(self._items())

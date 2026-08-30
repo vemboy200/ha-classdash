@@ -54,22 +54,41 @@ change, just the token.
 
 ## Entities
 
-One device ("ClassDash"), six sensors, updated by push — not polling.
-Home Assistant holds `/api/stream` open for as long as the entry is
-loaded; ClassDash sends the full current state the moment that connection
-opens, then again only when a collection pass actually changes something.
-If the connection drops, it's retried with backoff (5s up to 5 minutes);
-a brief blip doesn't touch the entities, but a longer outage marks them
-unavailable rather than silently going stale forever.
+Everything updates by push, not polling — Home Assistant holds
+`/api/stream` open for as long as the entry is loaded; ClassDash sends the
+full current state the moment that connection opens, then again only when
+a collection pass actually changes something. If the connection drops,
+it's retried with backoff (5s up to 5 minutes); a brief blip doesn't
+touch the entities, but a longer outage marks them unavailable rather
+than silently going stale forever.
+
+**One main device ("ClassDash")** with everything not tied to a specific
+class:
 
 | Entity | What it is |
 |---|---|
-| Due soon | Count of assignments due soon, with the list (up to 10) as an attribute |
-| Overdue | Count of overdue assignments, same attribute pattern |
-| Ahead | Count of assignments due further out |
-| Announcements | Count of recent teacher announcements, with a trimmed list attribute |
+| Due soon | Total assignments due soon across every class, with the list (up to 10) as an attribute |
+| Overdue | Total overdue assignments, same attribute pattern |
+| Ahead | Total assignments due further out |
+| Announcements | Total recent teacher announcements, with a trimmed list attribute |
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
+
+**One sub-device per class**, linked to the main device, created the
+moment a class shows up with anything due or announced (there's no
+"list of all classes" endpoint that covers Canvas and Edpuzzle, only
+Google Classroom — so this is derived from live data rather than seeded
+upfront):
+
+| Entity | What it is |
+|---|---|
+| Due soon / Overdue / Ahead | That class's own counts, same attribute pattern as the main device |
+| Assignments (calendar) | That class's due-soon + ahead + overdue assignments as calendar events — each due date/time becomes a 30-minute event; overdue ones stay on the calendar too, they just don't show as the "next" event |
+
+A class's entities are created once and kept — a class with nothing
+currently due still has its device, its sensors just read 0 and its
+calendar shows no upcoming events, rather than flickering in and out as
+things get assigned and turned in.
 
 ## License
 
