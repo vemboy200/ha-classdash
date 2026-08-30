@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ClassDash",
+        "description": "Enter the address of the computer running ClassDash's home API (started with `npm run api` or the settings-panel toggle).",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port"
+        }
+      },
+      "confirm": {
+        "title": "Confirm the certificate",
+        "description": "ClassDash printed this fingerprint to its own terminal when the home API started:\n\n{fingerprint}\n\nIf it matches, enter the bearer token printed alongside it.",
+        "data": {
+          "token": "Bearer token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New token needed",
+        "description": "ClassDash's bearer token no longer works — it may have been rolled from the settings panel. Enter the new one.",
+        "data": {
+          "token": "Bearer token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach ClassDash's home API at that address.",
+      "invalid_auth": "That token was rejected."
+    },
+    "abort": {
+      "already_configured": "This ClassDash server is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "due_soon": { "name": "Due soon" },
+      "overdue": { "name": "Overdue" },
+      "ahead": { "name": "Ahead" },
+      "announcements": { "name": "Announcements" },
+      "classes": { "name": "Classes" },
+      "last_collected": { "name": "Last collected" }
+    }
+  }
+}
