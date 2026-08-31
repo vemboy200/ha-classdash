@@ -11,6 +11,7 @@ entry and pushes each snapshot straight into the coordinator.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -147,13 +148,37 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         backoff = STREAM_RECONNECT_MIN_SECONDS
         while True:
             try:
-                async for bundle in self.client.async_stream_updates():
-                    data = _parse_snapshot(bundle)
+                async for event in self.client.async_stream_updates():
                     backoff = STREAM_RECONNECT_MIN_SECONDS
-                    if not self._first_update.done():
-                        self._first_update.set_result(data)
-                    else:
-                        self.async_set_updated_data(data)
+                    if event.event == "update":
+                        data = _parse_snapshot(event.data)
+                        if not self._first_update.done():
+                            self._first_update.set_result(data)
+                        else:
+                            self.async_set_updated_data(data)
+                    elif event.event == "heartbeat" and self._first_update.done():
+                        # A freshness signal, not new assignment/announcement
+                        # data (CONTRIBUTING.md is explicit about that) — swap
+                        # in just the refreshed status (collectedAt/minutesAgo
+                        # tick even when nothing else has), keep the existing
+                        # lists untouched. Guarding on _first_update.done()
+                        # rather than `self.data is not None`: self.data is
+                        # only set by DataUpdateCoordinator's own assignment
+                        # in _async_refresh, which — same race as
+                        # _async_update_data's own comment above — may not
+                        # have run yet even though _first_update itself
+                        # already has a result (set_result() marks a future
+                        # done immediately; it only *schedules* waiters,
+                        # doesn't run them). Reading self.data with the same
+                        # fallback as _async_update_data sidesteps that.
+                        base = (
+                            self.data
+                            if self.data is not None
+                            else self._first_update.result()
+                        )
+                        self.async_set_updated_data(
+                            dataclasses.replace(base, status=event.data)
+                        )
                 # The stream ended without an error (server closed it
                 # cleanly) — treat the same as a connection error below:
                 # reconnect after a short wait.

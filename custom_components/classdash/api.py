@@ -17,9 +17,17 @@ import hashlib
 import json
 import ssl
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
+
+# ClassDash sends a heartbeat every 60s (see CONTRIBUTING.md) even when
+# nothing changed, specifically so a push-only client can tell "checked,
+# genuinely nothing new" apart from "stopped running an hour ago". This
+# read timeout gives real margin above that before treating the
+# connection as dead and reconnecting.
+STREAM_READ_TIMEOUT = 90
 
 
 class ClassDashError(Exception):
@@ -92,6 +100,20 @@ def build_ssl_context(cert_pem: str) -> ssl.SSLContext:
     return ctx
 
 
+@dataclass(frozen=True)
+class StreamEvent:
+    """One event off /api/stream, tagged with which of the two kinds it is.
+
+    "update" carries a full bundled snapshot (every REST handle's output).
+    "heartbeat" carries only /api/status — a freshness signal, not new
+    assignment/announcement data; see CONTRIBUTING.md's explicit warning
+    against merging it in as if it were.
+    """
+
+    event: str
+    data: dict[str, Any]
+
+
 class ClassDashClient:
     """Talks to one ClassDash home API instance."""
 
@@ -128,24 +150,30 @@ class ClassDashClient:
         config flow. Ongoing data comes from `async_stream_updates` instead."""
         return await self._get("/api/status")
 
-    async def async_stream_updates(self) -> AsyncIterator[dict[str, Any]]:
-        """Connect to /api/stream and yield each bundled snapshot as it
-        arrives. ClassDash sends one immediately on connect, then again only
-        when a collection pass actually changed something — this generator
-        runs for as long as the connection lasts and yields once per event;
-        the caller is responsible for reconnecting when it ends.
+    async def async_stream_updates(self) -> AsyncIterator[StreamEvent]:
+        """Connect to /api/stream and yield each event as it arrives.
 
-        The connection has no read timeout: the server sends no heartbeat,
-        and a genuinely quiet stretch (nothing changed) can legitimately
-        last hours. A dead-but-unclosed connection is instead caught by the
-        caller's own reconnect loop noticing no data ever arrives.
+        ClassDash sends an "update" event immediately on connect (a full
+        bundled snapshot), then again only when a collection pass actually
+        changed something, plus a "heartbeat" event every 60s regardless
+        (just /api/status) so a client can tell a genuinely quiet stretch
+        apart from a dead connection. This generator runs for as long as
+        the connection lasts and yields once per event; the caller is
+        responsible for reconnecting when it ends.
+
+        A read timeout (STREAM_READ_TIMEOUT, well above the 60s heartbeat
+        interval) catches a connection that's gone quiet for longer than
+        any legitimate gap between events — surfaced as
+        ClassDashConnectionError, same as any other connection failure.
         """
         try:
             async with self._session.get(
                 f"{self._base}/api/stream",
                 headers={"Authorization": f"Bearer {self._token}"},
                 ssl=self._ssl_context,
-                timeout=aiohttp.ClientTimeout(total=None, sock_connect=10),
+                timeout=aiohttp.ClientTimeout(
+                    total=None, sock_connect=10, sock_read=STREAM_READ_TIMEOUT
+                ),
             ) as resp:
                 if resp.status == 401:
                     raise ClassDashAuthError("missing or wrong bearer token")
@@ -156,8 +184,13 @@ class ClassDashClient:
                     line = raw_line.decode("utf-8").rstrip("\n")
                     if line.startswith("event:"):
                         event_type = line[len("event:") :].strip()
-                    elif line.startswith("data:") and event_type == "update":
-                        yield json.loads(line[len("data:") :].strip())
+                    elif line.startswith("data:") and event_type in (
+                        "update",
+                        "heartbeat",
+                    ):
+                        yield StreamEvent(
+                            event_type, json.loads(line[len("data:") :].strip())
+                        )
                     elif not line:
                         event_type = None
         except aiohttp.ClientError as err:

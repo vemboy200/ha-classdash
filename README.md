@@ -61,10 +61,14 @@ change, just the token.
 Everything updates by push, not polling — Home Assistant holds
 `/api/stream` open for as long as the entry is loaded; ClassDash sends the
 full current state the moment that connection opens, then again only when
-a collection pass actually changes something. If the connection drops,
-it's retried with backoff (5s up to 5 minutes); a brief blip doesn't
-touch the entities, but a longer outage marks them unavailable rather
-than silently going stale forever.
+a collection pass actually changes something, plus a heartbeat every 60s
+regardless (just a status refresh, so "Last collected"'s `minutes_ago`
+keeps ticking even during a long quiet stretch) — that heartbeat also
+means a truly dead connection is noticed within about 90 seconds instead
+of hanging indefinitely. If the connection drops, it's retried with
+backoff (5s up to 5 minutes); a brief blip doesn't touch the entities,
+but a longer outage marks them unavailable rather than silently going
+stale forever.
 
 **One main device ("ClassDash")** with everything not tied to a specific
 class:

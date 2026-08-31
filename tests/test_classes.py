@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
+from custom_components.classdash.api import StreamEvent
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from custom_components.classdash.devices import class_unique_id
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -79,7 +80,7 @@ async def test_class_devices_created_with_correct_entities_and_linkage(
     )
 
     async def fake_stream():
-        yield bundle
+        yield StreamEvent("update", bundle)
         await asyncio.Event().wait()
 
     with patch(
@@ -148,8 +149,8 @@ async def test_a_class_appearing_later_gets_its_own_entities(
     second_pushed = asyncio.Event()
 
     async def fake_stream():
-        yield first
-        yield second
+        yield StreamEvent("update", first)
+        yield StreamEvent("update", second)
         second_pushed.set()
         await asyncio.Event().wait()
 

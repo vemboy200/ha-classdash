@@ -21,6 +21,7 @@ from custom_components.classdash.api import (
     ClassDashAuthError,
     ClassDashClient,
     ClassDashConnectionError,
+    StreamEvent,
     build_ssl_context,
 )
 
@@ -126,8 +127,35 @@ async def test_async_stream_updates_yields_parsed_events(
             events = [e async for e in client.async_stream_updates()]
 
     assert events == [
-        {"status": {"dueSoon": 1}},
-        {"status": {"dueSoon": 2}},
+        StreamEvent("update", {"status": {"dueSoon": 1}}),
+        StreamEvent("update", {"status": {"dueSoon": 2}}),
+    ]
+
+
+async def test_async_stream_updates_yields_heartbeats_too(
+    cert_factory, socket_enabled
+) -> None:
+    """Heartbeats are a distinct, real event type the client surfaces —
+    not something it should filter out as noise."""
+    body = (
+        b"event: update\ndata: {\"status\": {\"dueSoon\": 1}}\n\n"
+        b"event: heartbeat\ndata: {\"status\": {\"dueSoon\": 1, \"minutesAgo\": 2}}\n\n"
+    )
+
+    async def stream(request: web.Request) -> web.Response:
+        return web.Response(body=body, content_type="text/event-stream")
+
+    app = web.Application()
+    app.router.add_get("/api/stream", stream)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            events = [e async for e in client.async_stream_updates()]
+
+    assert events == [
+        StreamEvent("update", {"status": {"dueSoon": 1}}),
+        StreamEvent("heartbeat", {"status": {"dueSoon": 1, "minutesAgo": 2}}),
     ]
 
 
@@ -145,11 +173,12 @@ async def test_async_stream_updates_401_raises_auth_error(
                     pass
 
 
-async def test_async_stream_updates_ignores_non_update_events(
+async def test_async_stream_updates_ignores_unknown_events(
     cert_factory, socket_enabled
 ) -> None:
-    """Only `event: update` payloads are yielded — a comment/keepalive
-    line or a differently-named event shouldn't produce a bogus item."""
+    """Only `update` and `heartbeat` payloads are yielded — a
+    comment/keepalive line or an event name that's neither shouldn't
+    produce a bogus item."""
     body = (
         b": keepalive\n\n"
         b"event: other\ndata: {\"ignored\": true}\n\n"
@@ -167,4 +196,4 @@ async def test_async_stream_updates_ignores_non_update_events(
             client = _client_for(cert, port, session)
             events = [e async for e in client.async_stream_updates()]
 
-    assert events == [{"status": {"dueSoon": 5}}]
+    assert events == [StreamEvent("update", {"status": {"dueSoon": 5}})]

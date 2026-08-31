@@ -17,7 +17,11 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
-from custom_components.classdash.api import ClassDashAuthError, ClassDashConnectionError
+from custom_components.classdash.api import (
+    ClassDashAuthError,
+    ClassDashConnectionError,
+    StreamEvent,
+)
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from custom_components.classdash.coordinator import ClassDashCoordinator
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -72,9 +76,9 @@ async def test_subsequent_push_updates_coordinator_data(
     second_pushed = asyncio.Event()
 
     async def fake_stream():
-        yield BUNDLE_1
+        yield StreamEvent("update", BUNDLE_1)
         await release_second.wait()
-        yield BUNDLE_2
+        yield StreamEvent("update", BUNDLE_2)
         second_pushed.set()
         await asyncio.Event().wait()  # keep the "connection" open
 
@@ -94,6 +98,55 @@ async def test_subsequent_push_updates_coordinator_data(
         coordinator._listen_task.cancel()
 
 
+async def test_heartbeat_refreshes_status_without_touching_lists(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A heartbeat carries only /api/status — it should refresh that (so
+    minutes_ago actually ticks over time) without replacing the
+    assignment/announcement lists, which it doesn't even carry."""
+    heartbeat_pushed = asyncio.Event()
+
+    heartbeat_status = {**BUNDLE_1["status"], "minutesAgo": 3}
+
+    async def fake_stream():
+        yield StreamEvent("update", BUNDLE_1)
+        yield StreamEvent("heartbeat", heartbeat_status)
+        heartbeat_pushed.set()
+        await asyncio.Event().wait()
+
+    coordinator = _make_coordinator(hass, entry, fake_stream)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+        await asyncio.wait_for(heartbeat_pushed.wait(), timeout=2)
+
+        assert coordinator.data.status == heartbeat_status
+        # Untouched — a heartbeat carries no list data at all.
+        assert coordinator.data.due_soon == BUNDLE_1["due-soon"]
+        assert coordinator.last_update_success is True
+    finally:
+        coordinator._listen_task.cancel()
+
+
+async def test_heartbeat_before_any_update_is_ignored(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """Shouldn't happen in practice (ClassDash always sends "update"
+    immediately on connect, well under the 60s heartbeat interval), but
+    a heartbeat arriving with no data yet must not crash first refresh."""
+
+    async def fake_stream():
+        yield StreamEvent("heartbeat", {"dueSoon": 0})
+        yield StreamEvent("update", BUNDLE_1)
+        await asyncio.Event().wait()
+
+    coordinator = _make_coordinator(hass, entry, fake_stream)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+        assert coordinator.data.status["dueSoon"] == 1
+    finally:
+        coordinator._listen_task.cancel()
+
+
 async def test_reconnects_after_connection_error_and_keeps_pushing(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
@@ -104,9 +157,9 @@ async def test_reconnects_after_connection_error_and_keeps_pushing(
         nonlocal attempt
         attempt += 1
         if attempt == 1:
-            yield BUNDLE_1
+            yield StreamEvent("update", BUNDLE_1)
             raise ClassDashConnectionError("dropped")
-        yield BUNDLE_2
+        yield StreamEvent("update", BUNDLE_2)
         second_pushed.set()
         await asyncio.Event().wait()
 
@@ -133,7 +186,7 @@ async def test_auth_error_after_first_update_triggers_reauth(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
     async def fake_stream():
-        yield BUNDLE_1
+        yield StreamEvent("update", BUNDLE_1)
         raise ClassDashAuthError("token rolled")
 
     reauth_started = asyncio.Event()

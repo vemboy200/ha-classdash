@@ -8,7 +8,7 @@ from unittest.mock import patch
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from custom_components.classdash.api import ClassDashAuthError
+from custom_components.classdash.api import ClassDashAuthError, StreamEvent
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -48,7 +48,7 @@ def _make_entry(sample_certificate) -> MockConfigEntry:
 
 async def _open_stream_stub():
     """A stream that pushes one snapshot and then stays connected."""
-    yield FAKE_BUNDLE
+    yield StreamEvent("update", FAKE_BUNDLE)
     await asyncio.Event().wait()
 
 
