@@ -6,7 +6,9 @@
 
 A Home Assistant custom integration for [ClassDash](https://github.com/vemboy200/ClassDash)'s
 home API — reads due/overdue/ahead assignments and class announcements into
-Home Assistant sensors. Read-only, same as the API it talks to.
+Home Assistant sensors and a calendar per class. Mostly read-only: the
+only writes are two buttons that start a collection pass, nothing that
+touches assignment/announcement state.
 
 A personal companion project — it only makes sense for someone running
 ClassDash's home API on their own network — but with an eye toward
@@ -81,6 +83,13 @@ class:
 | Announcements | Total recent teacher announcements, with a trimmed list attribute |
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
+| Reload (button) | Starts the quick collection pass (Classroom + Canvas, ~17s) |
+| Check now (button) | Starts the full collection pass (+ Edpuzzle, ~1 min) |
+
+Both buttons only *start* the pass and return immediately — same as
+pressing the equivalent button on ClassDash's own summary page. There's
+nothing to wait on: the push stream's next "update" event (or "Last
+collected" ticking forward) is how you'd notice it finished.
 
 **One sub-device per class**, linked to the main device, created the
 moment a class shows up with anything due or announced (there's no

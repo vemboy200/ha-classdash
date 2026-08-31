@@ -145,10 +145,39 @@ class ClassDashClient:
         except aiohttp.ClientError as err:
             raise ClassDashConnectionError(str(err)) from err
 
+    async def _post(self, path: str) -> None:
+        try:
+            async with self._session.post(
+                f"{self._base}{path}",
+                headers={"Authorization": f"Bearer {self._token}"},
+                ssl=self._ssl_context,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise ClassDashAuthError("missing or wrong bearer token")
+                resp.raise_for_status()
+        except aiohttp.ClientError as err:
+            raise ClassDashConnectionError(str(err)) from err
+
     async def async_get_status(self) -> dict[str, Any]:
         """A single quick round trip — used only to validate a token in the
         config flow. Ongoing data comes from `async_stream_updates` instead."""
         return await self._get("/api/status")
+
+    async def async_reload(self) -> None:
+        """Start a quick collection pass (Classroom + Canvas, ~17s).
+
+        Only starts it — this returns as soon as ClassDash has accepted the
+        request, not when the pass finishes. The push stream's next
+        "update" event (or /api/status's collectedAt/minutesAgo) is how a
+        caller finds out when it's actually done.
+        """
+        await self._post("/api/reload")
+
+    async def async_check(self) -> None:
+        """Start the full collection pass (+ Edpuzzle, ~1 min). Same
+        fire-and-forget shape as async_reload."""
+        await self._post("/api/check")
 
     async def async_stream_updates(self) -> AsyncIterator[StreamEvent]:
         """Connect to /api/stream and yield each event as it arrives.

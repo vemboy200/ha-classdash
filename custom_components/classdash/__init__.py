@@ -12,7 +12,7 @@ from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BUTTON]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) -> bool:

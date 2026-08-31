@@ -1,4 +1,4 @@
-"""Per-class device identity, shared by the sensor and calendar platforms.
+"""Device identity, shared across the sensor/calendar/button platforms.
 
 A class's name is the only handle available across all three source
 platforms (Classroom, Canvas, Edpuzzle) — see `class_names` in
@@ -14,6 +14,15 @@ from homeassistant.util import slugify
 
 from .const import DOMAIN
 from .coordinator import ClassDashConfigEntry
+
+
+def main_device_info(entry: ClassDashConfigEntry) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.unique_id)},
+        name="ClassDash",
+        manufacturer="ClassDash",
+        model="School digest home API",
+    )
 
 
 def class_unique_id(entry: ClassDashConfigEntry, class_name: str) -> str:

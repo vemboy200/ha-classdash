@@ -12,19 +12,18 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, MAX_LIST_ATTRIBUTES
+from .const import MAX_LIST_ATTRIBUTES
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
     ClassDashData,
     class_names,
 )
-from .devices import class_device_info, class_unique_id
+from .devices import class_device_info, class_unique_id, main_device_info
 
 # Every entity here reads from the shared coordinator's already-fetched
 # data — there's no per-entity network call for concurrency to matter to.
@@ -188,12 +187,7 @@ class ClassDashSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.unique_id)},
-            name="ClassDash",
-            manufacturer="ClassDash",
-            model="School digest home API",
-        )
+        self._attr_device_info = main_device_info(entry)
 
     @property
     def native_value(self) -> Any:

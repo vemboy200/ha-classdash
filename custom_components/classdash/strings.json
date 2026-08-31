@@ -44,6 +44,10 @@
     },
     "calendar": {
       "assignments": { "name": "Assignments" }
+    },
+    "button": {
+      "reload": { "name": "Reload" },
+      "check": { "name": "Check now" }
     }
   }
 }

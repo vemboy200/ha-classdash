@@ -107,6 +107,67 @@ async def test_async_get_status_server_error_raises_connection_error(
                 await client.async_get_status()
 
 
+async def test_async_reload_posts_and_returns_nothing(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict[str, str] = {}
+
+    async def reload(request: web.Request) -> web.Response:
+        received["method"] = request.method
+        received["auth"] = request.headers.get("Authorization")
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/reload", reload)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session, token="secret-token")
+            assert await client.async_reload() is None
+
+    assert received == {"method": "POST", "auth": "Bearer secret-token"}
+
+
+async def _ok(request: web.Request) -> web.Response:
+    return web.Response(status=200)
+
+
+async def test_async_check_posts_and_returns_nothing(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/check", _ok)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await client.async_check() is None
+
+
+async def test_async_reload_401_raises_auth_error(cert_factory, socket_enabled) -> None:
+    app = web.Application()
+    app.router.add_post("/api/reload", _unauthorized)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashAuthError):
+                await client.async_reload()
+
+
+async def test_async_check_server_error_raises_connection_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/check", _server_error)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashConnectionError):
+                await client.async_check()
+
+
 async def test_async_stream_updates_yields_parsed_events(
     cert_factory, socket_enabled
 ) -> None:
