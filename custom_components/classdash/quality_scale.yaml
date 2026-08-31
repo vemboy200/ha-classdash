@@ -9,9 +9,10 @@ rules:
   brands:
     status: done
     comment: |
-      icon/logo assets are in custom_components/classdash/brand/, ready to submit to
-      home-assistant/brands under custom_integrations/classdash/ — not yet actually
-      submitted there. The current assets are a placeholder pending real branding.
+      Real icon/logo assets (256/512 icon, 960x192/1920x384 logo, matching
+      home-assistant/brands' actual dimension rules) are in
+      custom_components/classdash/brand/, ready to submit to home-assistant/brands
+      under custom_integrations/classdash/ — not yet actually submitted there.
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
