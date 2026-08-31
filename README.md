@@ -92,10 +92,12 @@ nothing to wait on: the push stream's next "update" event (or "Last
 collected" ticking forward) is how you'd notice it finished.
 
 **One sub-device per class**, linked to the main device, created the
-moment a class shows up with anything due or announced (there's no
-"list of all classes" endpoint that covers Canvas and Edpuzzle, only
-Google Classroom — so this is derived from live data rather than seeded
-upfront):
+moment a class is known about — either it has something due/announced,
+or it shows up in ClassDash's own merged Classroom+Canvas+Edpuzzle class
+roster. That roster only includes a class with nothing currently due if
+**ClassDash's own `showEmptyClasses` setting is on** (off by default) —
+with it off, a class still only gets a device once something's actually
+due or announced for it, same as before.
 
 | Entity | What it is |
 |---|---|

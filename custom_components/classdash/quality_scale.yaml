@@ -85,8 +85,9 @@ rules:
   docs-known-limitations:
     status: todo
     comment: Real limitations exist (class identity is a name string with no
-      cross-platform ID, /api/classes only covers Google Classroom) but aren't
-      pulled into their own documented section yet.
+      cross-platform ID; an empty class only gets a device at all if
+      ClassDash's own showEmptyClasses setting is on) but aren't pulled into
+      their own documented section yet.
   docs-supported-devices:
     status: exempt
     comment: Not hardware-based — the "devices" here are per-class, discovered

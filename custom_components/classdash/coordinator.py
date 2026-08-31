@@ -42,25 +42,37 @@ class ClassDashData:
     ahead: list[dict[str, Any]]
     overdue: list[dict[str, Any]]
     announcements: list[dict[str, Any]]
+    # {"name", "dueSoon", "ahead", "overdue"} per class — the merged
+    # cross-platform roster from /api/classes. Empty-count classes only
+    # appear here at all if ClassDash's own `showEmptyClasses` setting is
+    # on (off by default); see class_names' docstring for why this alone
+    # still isn't a complete source of class names on its own.
+    classes: list[dict[str, Any]]
 
 
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
 
 
 def class_names(data: ClassDashData) -> set[str]:
-    """Every distinct class name appearing anywhere in one snapshot.
+    """Every distinct class name known from one snapshot.
 
-    This is the *only* source the sensor/calendar platforms use to decide
-    which per-class devices exist — deliberately not /api/classes, which
-    only covers Google Classroom and would silently miss every Canvas and
-    Edpuzzle class. A class with nothing currently due or announced won't
-    have a device yet; one is created the moment anything of its shows up.
+    /api/classes now covers Classroom+Canvas+Edpuzzle (it didn't when this
+    function was first written — that gap is why due/ahead/overdue/
+    announcements were scanned directly instead, and why that scan still
+    happens: /api/classes' own roster only includes a class with nothing
+    currently due when ClassDash's `showEmptyClasses` setting is on, and
+    never includes an announcement-only class at all (its "present" set
+    is built strictly from due-soon/ahead/overdue, not announcements) — so
+    the union of both sources is still the real complete picture, not
+    either alone.
     """
-    return {
+    from_roster = {c["name"] for c in data.classes}
+    from_items = {
         name
         for item in (*data.due_soon, *data.ahead, *data.overdue, *data.announcements)
         if (name := item.get("class"))
     }
+    return from_roster | from_items
 
 
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
@@ -73,6 +85,7 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         ahead=bundle["ahead"],
         overdue=bundle["overdue"],
         announcements=bundle["announcements"],
+        classes=bundle["classes"],
     )
 
 
@@ -200,6 +213,26 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                     "classdash stream disconnected, retrying in %ss: %s",
                     backoff,
                     err,
+                )
+                if backoff >= STREAM_UNAVAILABLE_THRESHOLD_SECONDS:
+                    self.async_set_update_error(err)
+            except Exception as err:  # noqa: BLE001
+                # Anything else — a malformed/unexpected event shape, a bug
+                # in this code's own parsing — must not be allowed to
+                # terminate this task silently. Without a catch-all here,
+                # an exception raised while processing one event inside the
+                # `async for` above would propagate straight out of
+                # _listen() itself: no reconnect would ever happen again
+                # for the rest of the config entry's lifetime, and nothing
+                # would visibly say why. Logged at ERROR (not the debug
+                # level ClassDashConnectionError gets) since this
+                # represents a real bug or an unexpected server change,
+                # not an ordinary network hiccup.
+                if not self._first_update.done():
+                    self._first_update.set_exception(err)
+                    return
+                _LOGGER.exception(
+                    "classdash stream: unexpected error, retrying in %ss", backoff
                 )
                 if backoff >= STREAM_UNAVAILABLE_THRESHOLD_SECONDS:
                     self.async_set_update_error(err)

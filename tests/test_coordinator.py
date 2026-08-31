@@ -32,6 +32,7 @@ BUNDLE_1 = {
     "ahead": [],
     "overdue": [],
     "announcements": [],
+    "classes": [],
 }
 BUNDLE_2 = {
     "status": {"dueSoon": 2, "overdue": 0, "ahead": 0, "announcements": 0},
@@ -39,6 +40,7 @@ BUNDLE_2 = {
     "ahead": [],
     "overdue": [],
     "announcements": [],
+    "classes": [],
 }
 
 
@@ -173,6 +175,55 @@ async def test_reconnects_after_connection_error_and_keeps_pushing(
             # Background tasks are deliberately excluded from
             # hass.async_block_till_done(), so wait on the reconnect
             # directly instead.
+            await asyncio.wait_for(second_pushed.wait(), timeout=2)
+
+        assert attempt == 2
+        assert coordinator.data.status["dueSoon"] == 2
+        assert coordinator.last_update_success is True
+    finally:
+        coordinator._listen_task.cancel()
+
+
+async def test_unexpected_error_reconnects_instead_of_killing_the_listener(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A malformed event arriving *after* a successful first update (or
+    any other bug in event processing) must not silently end the
+    listener task forever — caught live while adding the classes roster:
+    an incomplete fake bundle raised a bare KeyError that neither
+    ClassDashAuthError nor ClassDashConnectionError caught, and without a
+    catch-all, that exception propagated straight out of _listen(),
+    ending the task with no reconnect ever happening again."""
+    attempt = 0
+    second_pushed = asyncio.Event()
+    malformed_bundle = {
+        "status": BUNDLE_1["status"],
+        "due-soon": [],
+        "ahead": [],
+        "overdue": [],
+        "announcements": [],
+        # "classes" missing on purpose — the same shape of bug that
+        # motivated this test, triggering a bare KeyError while parsing.
+    }
+
+    async def fake_stream():
+        nonlocal attempt
+        attempt += 1
+        if attempt == 1:
+            yield StreamEvent("update", BUNDLE_1)  # satisfies first refresh
+            yield StreamEvent("update", malformed_bundle)  # then breaks
+            return
+        yield StreamEvent("update", BUNDLE_2)
+        second_pushed.set()
+        await asyncio.Event().wait()
+
+    coordinator = _make_coordinator(hass, entry, fake_stream)
+    try:
+        with patch(
+            "custom_components.classdash.coordinator.asyncio.sleep",
+            AsyncMock(),
+        ):
+            await coordinator.async_config_entry_first_refresh()
             await asyncio.wait_for(second_pushed.wait(), timeout=2)
 
         assert attempt == 2

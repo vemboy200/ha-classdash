@@ -36,7 +36,7 @@ def _status(**counts) -> dict:
     }
 
 
-def _bundle(due_soon=(), ahead=(), overdue=(), announcements=()) -> dict:
+def _bundle(due_soon=(), ahead=(), overdue=(), announcements=(), classes=()) -> dict:
     return {
         "status": _status(
             due_soon=len(due_soon),
@@ -48,6 +48,7 @@ def _bundle(due_soon=(), ahead=(), overdue=(), announcements=()) -> dict:
         "ahead": list(ahead),
         "overdue": list(overdue),
         "announcements": list(announcements),
+        "classes": list(classes),
     }
 
 
@@ -168,3 +169,53 @@ async def test_a_class_appearing_later_gets_its_own_entities(
     )
     assert entity_id is not None
     assert hass.states.get(entity_id).state == "1"
+
+
+async def test_class_with_nothing_due_still_gets_a_device(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """A class can appear in /api/classes' roster (ClassDash's own
+    showEmptyClasses setting) with zero current items — it should still
+    get a device, with its sensors reading 0 and no calendar events,
+    rather than being invisible until something's assigned."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    bundle = _bundle(
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")],
+        classes=[
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0},
+        ],
+    )
+
+    async def fake_stream():
+        yield StreamEvent("update", bundle)
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    art_device = dev_reg.async_get_device(
+        {(DOMAIN, class_unique_id(entry, "Art History"))}
+    )
+    assert art_device is not None
+
+    entity_id = ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, f"{class_unique_id(entry, 'Art History')}_due_soon"
+    )
+    assert entity_id is not None
+    assert hass.states.get(entity_id).state == "0"
+
+    calendar_id = ent_reg.async_get_entity_id(
+        "calendar", DOMAIN, f"{class_unique_id(entry, 'Art History')}_calendar"
+    )
+    assert calendar_id is not None
+    assert hass.states.get(calendar_id).state == "off"

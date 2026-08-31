@@ -45,6 +45,7 @@ def test_event_is_the_soonest_not_yet_ended() -> None:
         ahead=[_assignment("Final project", "2026-10-01T23:59:00+00:00", item_id="ahead")],
         overdue=[_assignment("Old worksheet", "2026-08-01T23:59:00+00:00", item_id="overdue")],
         announcements=[],
+        classes=[],
     )
     event = _calendar(data).event
     assert event is not None
@@ -59,6 +60,7 @@ def test_event_is_none_when_everything_is_over() -> None:
         ahead=[],
         overdue=[_assignment("Old worksheet", "2020-01-01T23:59:00+00:00")],
         announcements=[],
+        classes=[],
     )
     assert _calendar(data).event is None
 
@@ -70,6 +72,7 @@ def test_event_ignores_other_classes() -> None:
         ahead=[],
         overdue=[],
         announcements=[],
+        classes=[],
     )
     assert _calendar(data).event is None
 
@@ -85,6 +88,7 @@ async def test_async_get_events_includes_overdue_in_range() -> None:
         ahead=[],
         overdue=[_assignment("Late", "2026-08-01T23:59:00+00:00", item_id="late")],
         announcements=[],
+        classes=[],
     )
     events = await _calendar(data).async_get_events(
         hass=None,
@@ -101,6 +105,7 @@ async def test_async_get_events_respects_the_range() -> None:
         ahead=[_assignment("Out of range", "2027-01-01T23:59:00+00:00", item_id="out")],
         overdue=[],
         announcements=[],
+        classes=[],
     )
     events = await _calendar(data).async_get_events(
         hass=None,

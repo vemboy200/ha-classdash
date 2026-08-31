@@ -30,6 +30,7 @@ FAKE_BUNDLE = {
     "ahead": [],
     "overdue": [],
     "announcements": [],
+    "classes": [],
 }
 
 
