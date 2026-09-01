@@ -16,7 +16,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -75,7 +75,12 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """First step: where's the server."""
+        """First step: where's the server.
+
+        Also the entry point for reconfigure (async_step_reconfigure just
+        delegates here) — same form, pre-filled with the entry's current
+        host/port when there is one to pre-fill from.
+        """
         errors: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_HOST]
@@ -91,9 +96,28 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._cert_pem = pem_from_der(der)
                 return await self.async_step_confirm()
 
-        return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
-        )
+        schema = STEP_USER_SCHEMA
+        if self.source == SOURCE_RECONFIGURE:
+            current = self._get_reconfigure_entry().data
+            schema = self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA,
+                {CONF_HOST: current[CONF_HOST], CONF_PORT: current[CONF_PORT]},
+            )
+
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change host/port without removing and re-adding the entry.
+
+        Runs the exact same two steps as initial setup (fetch the cert,
+        confirm its fingerprint, enter a token) rather than a cut-down
+        version — a different address might be a genuinely different
+        server, needing its own pinned certificate and token, not just a
+        moved copy of the same one.
+        """
+        return await self.async_step_user(user_input)
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -111,16 +135,28 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
             except ClassDashConnectionError:
                 errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(f"{self._host}:{self._port}")
+                new_unique_id = f"{self._host}:{self._port}"
+                await self.async_set_unique_id(new_unique_id)
+                data = {
+                    CONF_HOST: self._host,
+                    CONF_PORT: self._port,
+                    CONF_TOKEN: token,
+                    CONF_CERT_PEM: self._cert_pem,
+                }
+                if self.source == SOURCE_RECONFIGURE:
+                    reconfigure_entry = self._get_reconfigure_entry()
+                    if new_unique_id != reconfigure_entry.unique_id:
+                        # Only a genuine problem if it collides with some
+                        # *other* entry — matching the entry being
+                        # reconfigured itself (unchanged host/port) is
+                        # the common case and must not abort.
+                        self._abort_if_unique_id_configured()
+                    return self.async_update_reload_and_abort(
+                        reconfigure_entry, unique_id=new_unique_id, data=data
+                    )
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=f"ClassDash ({self._host})",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: token,
-                        CONF_CERT_PEM: self._cert_pem,
-                    },
+                    title=f"ClassDash ({self._host})", data=data
                 )
 
         return self.async_show_form(

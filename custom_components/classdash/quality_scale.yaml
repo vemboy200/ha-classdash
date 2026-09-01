@@ -69,8 +69,14 @@ rules:
   # Gold
   devices: done
   diagnostics:
-    status: todo
-    comment: Deliberately deferred — not essential for an initial submission.
+    status: done
+    comment: Built for the user's own personal use, not because it's needed for
+      an eventual core submission — they've said explicitly they know this
+      (and reconfiguration-flow below) would need to come back out first.
+      Narrowly scoped — counts/class-names/connection-state only, not raw
+      assignment content, since this handles a minor's school data and
+      diagnostics dumps end up in public issue reports. Token and pinned cert
+      redacted via async_redact_data.
   discovery:
     status: exempt
     comment: No discovery protocol exists for an arbitrary LAN host:port; ClassDash's
@@ -120,9 +126,13 @@ rules:
     comment: Icons are hardcoded (_attr_icon / description icon=) rather than
       declared in icons.json.
   reconfiguration-flow:
-    status: todo
-    comment: Only reauth (token) exists; changing host/port requires removing and
-      re-adding the entry.
+    status: done
+    comment: Same personal-use call as diagnostics above. Reuses the exact same
+      user/confirm steps as initial setup rather than a cut-down version — a
+      changed address might be a genuinely different server, needing its own
+      pinned cert and token. unique_id is only re-checked against *other*
+      entries, not the one being reconfigured (matching yourself on an
+      unchanged host/port must not abort).
   repair-issues:
     status: exempt
     comment: No actionable repair scenario currently identified.

@@ -58,6 +58,13 @@ one stops working immediately). When that happens this integration will
 prompt for reauthentication — the pinned certificate doesn't need to
 change, just the token.
 
+### If the server moves
+
+Settings → Devices & Services → ClassDash → Reconfigure lets you change
+the host/port without removing and re-adding the entry. It runs through
+the exact same fingerprint-confirmation and token steps as initial setup
+— a different address might be a genuinely different server.
+
 ## Entities
 
 Everything updates by push, not polling — Home Assistant holds
@@ -134,6 +141,14 @@ on the calendar of whatever class they're assigned to, but only for
 reading — creating, editing, marking done, hiding, or deleting one is
 still ClassDash-side only, same as hiding/muting a real assignment. None
 of that has an equivalent here yet.
+
+## Diagnostics
+
+Settings → Devices & Services → ClassDash → Download diagnostics gets a
+JSON dump for bug reports — counts, class names, and connection state,
+not the content of any assignment or announcement (this handles a
+minor's school data, and diagnostics dumps tend to end up in public issue
+threads). The bearer token and pinned certificate are redacted too.
 
 ## License
 

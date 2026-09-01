@@ -30,7 +30,8 @@
     },
     "abort": {
       "already_configured": "This ClassDash server is already configured.",
-      "reauth_successful": "Re-authentication was successful."
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Reconfiguration was successful."
     }
   },
   "entity": {

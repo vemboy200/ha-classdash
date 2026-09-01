@@ -142,6 +142,119 @@ async def test_duplicate_host_port_aborts(
     assert result["reason"] == "already_configured"
 
 
+async def test_reconfigure_updates_host_and_reprompts_for_fingerprint(
+    hass: HomeAssistant, mock_status_ok, mock_setup_entry: AsyncMock, sample_certificate
+) -> None:
+    """Reconfigure runs the exact same two steps as initial setup — a
+    different address gets its own fingerprint confirmation and token,
+    not just a silent host swap on the existing pinned cert."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{USER_INPUT['host']}:{USER_INPUT['port']}",
+        data={**USER_INPUT, "token": "old-token", CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["step_id"] == "user"
+    # Pre-filled with the entry's current values — a suggested_value
+    # hint per field, not a functional default (voluptuous itself
+    # still requires real input; this is UI pre-fill only).
+    suggested = {
+        key: key.description["suggested_value"] for key in result["data_schema"].schema
+    }
+    assert suggested == USER_INPUT
+
+    new_host_input = {"host": "192.168.1.99", "port": 8734}
+    with patch(
+        "custom_components.classdash.config_flow.fetch_server_certificate",
+        AsyncMock(return_value=sample_certificate.der),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], new_host_input
+        )
+    assert result["step_id"] == "confirm"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"token": "new-token"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["host"] == "192.168.1.99"
+    assert entry.data["token"] == "new-token"
+    assert entry.unique_id == "192.168.1.99:8734"
+
+
+async def test_reconfigure_to_same_address_does_not_abort_as_duplicate(
+    hass: HomeAssistant, mock_status_ok, mock_setup_entry: AsyncMock, sample_certificate
+) -> None:
+    """Reconfiguring without changing host/port must not trip the
+    duplicate-entry check against itself."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{USER_INPUT['host']}:{USER_INPUT['port']}",
+        data={**USER_INPUT, "token": "old-token", CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(
+        "custom_components.classdash.config_flow.fetch_server_certificate",
+        AsyncMock(return_value=sample_certificate.der),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], USER_INPUT
+        )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"token": "new-token"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["token"] == "new-token"
+
+
+async def test_reconfigure_to_another_entrys_address_aborts_as_duplicate(
+    hass: HomeAssistant, mock_status_ok, mock_setup_entry: AsyncMock, sample_certificate
+) -> None:
+    """Changing to an address *another* existing entry already uses is a
+    real collision, unlike matching yourself."""
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.200:8734",
+        data={
+            "host": "192.168.1.200",
+            "port": 8734,
+            "token": "t",
+            CONF_CERT_PEM: sample_certificate.pem,
+        },
+    )
+    other.add_to_hass(hass)
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{USER_INPUT['host']}:{USER_INPUT['port']}",
+        data={**USER_INPUT, "token": "old-token", CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(
+        "custom_components.classdash.config_flow.fetch_server_certificate",
+        AsyncMock(return_value=sample_certificate.der),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"host": "192.168.1.200", "port": 8734}
+        )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"token": "new-token"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
 async def test_reauth_updates_token(
     hass: HomeAssistant, mock_status_ok, mock_setup_entry: AsyncMock, sample_certificate
 ) -> None:
