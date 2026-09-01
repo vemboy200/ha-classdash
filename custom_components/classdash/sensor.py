@@ -22,6 +22,7 @@ from .coordinator import (
     ClassDashCoordinator,
     ClassDashData,
     class_names,
+    is_hidden,
 )
 from .devices import class_device_info, class_unique_id, main_device_info
 
@@ -31,7 +32,13 @@ PARALLEL_UPDATES = 0
 
 
 def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
-    """Trim an assignment list down to what's worth showing as an attribute."""
+    """Trim an assignment list down to what's worth showing as an attribute.
+
+    Excludes hidden items — /api/due-soon etc. no longer filter those out
+    server-side (everything goes out, tagged, per CONTRIBUTING.md), so
+    without this the preview list would drift from the sensor's own count
+    (which reads /api/status's already-filtered numbers)."""
+    visible = [x for x in items if not is_hidden(x)]
     trimmed = [
         {
             "title": x.get("title"),
@@ -39,7 +46,7 @@ def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
             "due": x.get("due"),
             "link": x.get("link"),
         }
-        for x in items[:MAX_LIST_ATTRIBUTES]
+        for x in visible[:MAX_LIST_ATTRIBUTES]
     ]
     return {"assignments": trimmed}
 
@@ -226,7 +233,7 @@ class ClassDashClassSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
         return [
             x
             for x in getattr(self.coordinator.data, self._key)
-            if x.get("class") == self._class_name
+            if x.get("class") == self._class_name and not is_hidden(x)
         ]
 
     @property

@@ -54,7 +54,7 @@ type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
 
 
 def class_names(data: ClassDashData) -> set[str]:
-    """Every distinct class name known from one snapshot.
+    """Every distinct class name known from one snapshot, minus orphaned ones.
 
     /api/classes now covers Classroom+Canvas+Edpuzzle (it didn't when this
     function was first written — that gap is why due/ahead/overdue/
@@ -65,14 +65,34 @@ def class_names(data: ClassDashData) -> set[str]:
     is built strictly from due-soon/ahead/overdue, not announcements) — so
     the union of both sources is still the real complete picture, not
     either alone.
+
+    Each roster entry also carries `status`: "known" (the platform still
+    lists the class) or "orphaned" (a real transfer, or a class hidden on
+    Classroom's own side — old data for it is still around, but it's not
+    a real live class any more). An orphaned class is excluded here even
+    if it still has lingering items in the due/overdue lists — the whole
+    point of the roster carrying `status` at all is so a client doesn't
+    have to keep an entity around for a class that's genuinely gone.
+    ClassDash's CONTRIBUTING.md is explicit that this exact ambiguity
+    once flooded a Home Assistant integration (this one) with an entity
+    for a class the student had already moved on from.
     """
-    from_roster = {c["name"] for c in data.classes}
+    orphaned = {c["name"] for c in data.classes if c.get("status") == "orphaned"}
+    from_roster = {c["name"] for c in data.classes if c.get("status") != "orphaned"}
     from_items = {
         name
         for item in (*data.due_soon, *data.ahead, *data.overdue, *data.announcements)
         if (name := item.get("class"))
     }
-    return from_roster | from_items
+    return (from_roster | from_items) - orphaned
+
+
+def is_hidden(item: dict[str, Any]) -> bool:
+    """A hidden item was dismissed on purpose. /api/overdue and friends no
+    longer filter these out server-side (everything goes out, tagged, per
+    CONTRIBUTING.md) — a client filters if it wants the old "actionable
+    only" behavior, same as /api/status's own counts already do."""
+    return "hidden" in item.get("tags", [])
 
 
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:

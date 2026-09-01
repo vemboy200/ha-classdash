@@ -109,6 +109,21 @@ currently due still has its device, its sensors just read 0 and its
 calendar shows no upcoming events, rather than flickering in and out as
 things get assigned and turned in.
 
+**Orphaned classes never get a device in the first place.** ClassDash
+tags each class in its roster `"known"` or `"orphaned"` — orphaned means
+the platform doesn't actually list it any more (a real class transfer,
+or a class hidden on Classroom's own side), even if old data for it is
+still lying around. This integration skips those entirely, even if they
+still have items sitting in due/overdue. A device already created
+*before* a class became orphaned isn't cleaned up automatically, though
+— remove it by hand from Settings → Devices & Services if that happens.
+
+**Hidden/dismissed items don't count or show up.** ClassDash's API no
+longer filters these out itself (everything comes back tagged instead,
+so a client can decide) — this integration filters `"hidden"`-tagged
+items out of every count, attribute list, and calendar, so a dismissed
+assignment behaves the same as it always did: gone.
+
 ## License
 
 GPL-3.0, matching ClassDash itself — see [LICENSE](LICENSE).

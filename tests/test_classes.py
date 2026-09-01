@@ -17,8 +17,15 @@ from custom_components.classdash.devices import class_unique_id
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
-def _assignment(class_name: str, title: str, due: str, item_id: str) -> dict:
-    return {"id": item_id, "title": title, "class": class_name, "due": due, "link": None}
+def _assignment(class_name: str, title: str, due: str, item_id: str, tags=()) -> dict:
+    return {
+        "id": item_id,
+        "title": title,
+        "class": class_name,
+        "due": due,
+        "link": None,
+        "tags": list(tags),
+    }
 
 
 def _status(**counts) -> dict:
@@ -219,3 +226,98 @@ async def test_class_with_nothing_due_still_gets_a_device(
     )
     assert calendar_id is not None
     assert hass.states.get(calendar_id).state == "off"
+
+
+async def test_orphaned_class_gets_no_device_even_with_lingering_items(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """The exact scenario ClassDash's CONTRIBUTING.md calls out by name:
+    a class the student has moved on from, but that still has old items
+    sitting in overdue, must not get an entity."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    bundle = _bundle(
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")],
+        overdue=[_assignment("Old Class", "Ancient worksheet", "2020-01-01T00:00:00+00:00", "o1")],
+        classes=[
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known"},
+            {
+                "name": "Old Class",
+                "dueSoon": 0,
+                "ahead": 0,
+                "overdue": 1,
+                "status": "orphaned",
+            },
+        ],
+    )
+
+    async def fake_stream():
+        yield StreamEvent("update", bundle)
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    dev_reg = dr.async_get(hass)
+    assert (
+        dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Old Class"))})
+        is None
+    )
+
+
+async def test_hidden_items_excluded_from_per_class_count_and_calendar(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """/api/overdue no longer filters hidden items server-side (they're
+    tagged instead) — the per-class sensor and calendar must filter them
+    out themselves, or a dismissed item would silently inflate the count
+    and reappear on the calendar."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    bundle = _bundle(
+        overdue=[
+            _assignment(
+                "Physics", "Visible one", "2026-09-10T00:00:00+00:00", "v1"
+            ),
+            _assignment(
+                "Physics",
+                "Dismissed one",
+                "2026-09-11T00:00:00+00:00",
+                "h1",
+                tags=["hidden"],
+            ),
+        ]
+    )
+
+    async def fake_stream():
+        yield StreamEvent("update", bundle)
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    ent_reg = er.async_get(hass)
+
+    overdue_id = ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, f"{class_unique_id(entry, 'Physics')}_overdue"
+    )
+    overdue_state = hass.states.get(overdue_id)
+    assert overdue_state.state == "1"
+    assert [a["title"] for a in overdue_state.attributes["assignments"]] == [
+        "Visible one"
+    ]
+
+    calendar_id = ent_reg.async_get_entity_id(
+        "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
+    )
+    assert hass.states.get(calendar_id).attributes["message"] == "Visible one"

@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
+from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names, is_hidden
 from .devices import class_device_info, class_unique_id
 
 # Same reasoning as sensor.py's PARALLEL_UPDATES: everything here reads
@@ -91,7 +91,7 @@ class ClassDashClassCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEn
         items = [
             x
             for x in (*data.due_soon, *data.ahead, *data.overdue)
-            if x.get("class") == self._class_name
+            if x.get("class") == self._class_name and not is_hidden(x)
         ]
         events = [e for x in items if (e := _assignment_to_event(x)) is not None]
         events.sort(key=lambda e: e.start_datetime_local)

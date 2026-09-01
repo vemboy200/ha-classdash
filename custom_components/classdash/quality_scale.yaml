@@ -128,9 +128,11 @@ rules:
     comment: No actionable repair scenario currently identified.
   stale-devices:
     status: todo
-    comment: Deliberately additive-only right now — a class device persists even
-      with nothing currently due, rather than being removed and re-created as
-      things get assigned and turned in. See coordinator.py's class_names().
+    comment: class_names() now excludes classes /api/classes marks "orphaned"
+      (a real transfer, or hidden on Classroom's own side) from getting NEW
+      devices — but a device already created before a class became orphaned
+      is never actively removed. Still additive-only for devices that already
+      exist. See coordinator.py's class_names().
 
   # Platinum
   async-dependency:

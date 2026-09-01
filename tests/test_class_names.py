@@ -1,15 +1,18 @@
-"""Direct unit tests for class_names() — pure function, no HA needed.
+"""Direct unit tests for class_names() and is_hidden() — pure functions,
+no HA needed.
 
 class_names() unions two sources on purpose: the /api/classes roster
 (which only includes an empty-count class when ClassDash's own
 showEmptyClasses setting is on, and never includes an announcement-only
 class at all) and a scan of due-soon/ahead/overdue/announcements (which
 misses empty classes entirely). Neither alone is the complete picture.
+It then excludes anything the roster marks "orphaned" — a class that no
+longer really exists but still has old data lingering.
 """
 
 from __future__ import annotations
 
-from custom_components.classdash.coordinator import ClassDashData, class_names
+from custom_components.classdash.coordinator import ClassDashData, class_names, is_hidden
 
 
 def _data(due_soon=(), ahead=(), overdue=(), announcements=(), classes=()) -> ClassDashData:
@@ -51,3 +54,48 @@ def test_unions_both_sources_without_duplicates() -> None:
 
 def test_empty_everything_is_empty() -> None:
     assert class_names(_data()) == set()
+
+
+def test_excludes_orphaned_classes() -> None:
+    data = _data(
+        classes=[
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known"},
+            {"name": "Old Class", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "orphaned"},
+        ]
+    )
+    assert class_names(data) == {"Physics"}
+
+
+def test_orphaned_class_excluded_even_with_lingering_due_items() -> None:
+    """The whole point of `status` existing: an orphaned class can still
+    have old items sitting in due/overdue, and it should stay excluded
+    regardless — that's the exact scenario CONTRIBUTING.md describes as
+    having flooded a real Home Assistant instance with a stale entity."""
+    data = _data(
+        overdue=[{"class": "Old Class", "id": "x1"}],
+        classes=[
+            {
+                "name": "Old Class",
+                "dueSoon": 0,
+                "ahead": 0,
+                "overdue": 1,
+                "status": "orphaned",
+            }
+        ],
+    )
+    assert class_names(data) == set()
+
+
+def test_missing_status_defaults_to_not_orphaned() -> None:
+    """Older test fixtures / a hypothetical older ClassDash without the
+    status field shouldn't suddenly exclude everything."""
+    data = _data(classes=[{"name": "Physics", "dueSoon": 0, "ahead": 0, "overdue": 0}])
+    assert class_names(data) == {"Physics"}
+
+
+def test_is_hidden_true_only_when_tagged() -> None:
+    assert is_hidden({"tags": ["hidden"]}) is True
+    assert is_hidden({"tags": ["muted", "hidden"]}) is True
+    assert is_hidden({"tags": ["muted"]}) is False
+    assert is_hidden({"tags": []}) is False
+    assert is_hidden({}) is False
