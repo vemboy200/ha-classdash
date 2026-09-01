@@ -12,17 +12,33 @@ longer really exists but still has old data lingering.
 
 from __future__ import annotations
 
-from custom_components.classdash.coordinator import ClassDashData, class_names, is_hidden
+from custom_components.classdash.coordinator import (
+    ClassDashData,
+    class_names,
+    is_done,
+    is_hidden,
+)
 
 
-def _data(due_soon=(), ahead=(), overdue=(), announcements=(), classes=()) -> ClassDashData:
+def _data(
+    due_soon=(),
+    ahead=(),
+    overdue=(),
+    done=(),
+    announcements=(),
+    classes=(),
+    virtual=(),
+) -> ClassDashData:
     return ClassDashData(
         status={},
         due_soon=list(due_soon),
         ahead=list(ahead),
         overdue=list(overdue),
+        done=list(done),
         announcements=list(announcements),
         classes=list(classes),
+        check_status={},
+        virtual=list(virtual),
     )
 
 
@@ -99,3 +115,31 @@ def test_is_hidden_true_only_when_tagged() -> None:
     assert is_hidden({"tags": ["muted"]}) is False
     assert is_hidden({"tags": []}) is False
     assert is_hidden({}) is False
+
+
+def test_is_done_true_only_when_tagged() -> None:
+    assert is_done({"tags": ["done"]}) is True
+    assert is_done({"tags": ["hidden", "done"]}) is True
+    assert is_done({"tags": ["hidden"]}) is False
+    assert is_done({"tags": []}) is False
+    assert is_done({}) is False
+
+
+def test_includes_classes_from_done_items() -> None:
+    """A class whose only current data is completed work should still be
+    known — otherwise a class where everything's turned in would have no
+    way to show its Done count at all."""
+    data = _data(done=[{"class": "Physics", "tags": ["done"]}])
+    assert class_names(data) == {"Physics"}
+
+
+def test_includes_classes_from_virtual_reminders() -> None:
+    """A virtual reminder assigned to a class not otherwise known (no
+    real assignment, not in the roster) should still surface the class."""
+    data = _data(virtual=[{"class": "Personal Project", "title": "Study for SATs"}])
+    assert class_names(data) == {"Personal Project"}
+
+
+def test_virtual_reminder_with_no_class_contributes_nothing() -> None:
+    data = _data(virtual=[{"class": None, "title": "General reminder"}])
+    assert class_names(data) == set()

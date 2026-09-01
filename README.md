@@ -80,9 +80,11 @@ class:
 | Due soon | Total assignments due soon across every class, with the list (up to 10) as an attribute |
 | Overdue | Total overdue assignments, same attribute pattern |
 | Ahead | Total assignments due further out |
+| Done | Total turned-in work, same attribute pattern |
 | Announcements | Total recent teacher announcements, with a trimmed list attribute |
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
+| Classroom / Canvas / Edpuzzle status | `ok`, `problem`, or `unknown` — pipeline health for that platform's last collection attempt, with `at` (when) and `detail` (error message, if any) as attributes. `unknown` covers "never checked yet" and "turned off" (no Canvas address configured, Edpuzzle disabled) alike |
 | Reload (button) | Starts the quick collection pass (Classroom + Canvas, ~17s) |
 | Check now (button) | Starts the full collection pass (+ Edpuzzle, ~1 min) |
 
@@ -101,8 +103,8 @@ due or announced for it, same as before.
 
 | Entity | What it is |
 |---|---|
-| Due soon / Overdue / Ahead | That class's own counts, same attribute pattern as the main device |
-| Assignments (calendar) | That class's due-soon + ahead + overdue assignments as calendar events — each due date/time becomes a 30-minute event; overdue ones stay on the calendar too, they just don't show as the "next" event |
+| Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device |
+| Assignments (calendar) | That class's due-soon + ahead + overdue assignments, plus any virtual reminder assigned to it, as calendar events — each due date/time becomes a 30-minute event; overdue ones stay on the calendar too, they just don't show as the "next" event. A reminder marked done drops off the calendar the same way a real done assignment structurally never appears on it |
 
 A class's entities aren't tied to whether anything's currently due —
 zero due items just means the sensors read 0 and the calendar shows no
@@ -124,6 +126,14 @@ longer filters these out itself (everything comes back tagged instead,
 so a client can decide) — this integration filters `"hidden"`-tagged
 items out of every count, attribute list, and calendar, so a dismissed
 assignment behaves the same as it always did: gone.
+
+## What's read-only here
+
+Virtual reminders (assignments you type into ClassDash yourself) show up
+on the calendar of whatever class they're assigned to, but only for
+reading — creating, editing, marking done, hiding, or deleting one is
+still ClassDash-side only, same as hiding/muting a real assignment. None
+of that has an equivalent here yet.
 
 ## License
 

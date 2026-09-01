@@ -12,6 +12,8 @@ from custom_components.classdash.api import ClassDashAuthError, StreamEvent
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from .conftest import bundle_extras
+
 FAKE_STATUS = {
     "collectedAt": "2026-08-30T12:00:00.000Z",
     "minutesAgo": 3,
@@ -20,11 +22,13 @@ FAKE_STATUS = {
     "dueSoon": 2,
     "overdue": 1,
     "ahead": 9,
+    "done": 5,
     "announcements": 4,
     "removed": 0,
     "language": "en",
 }
 FAKE_BUNDLE = {
+    **bundle_extras(),
     "status": FAKE_STATUS,
     "due-soon": [],
     "ahead": [],

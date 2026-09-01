@@ -103,6 +103,15 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         attrs_fn=lambda d: _assignment_attrs(d.ahead),
     ),
     ClassDashSensorDescription(
+        key="done",
+        translation_key="done",
+        icon="mdi:book-check",
+        native_unit_of_measurement="assignments",
+        state_class="measurement",
+        value_fn=lambda d: d.status["done"],
+        attrs_fn=lambda d: _assignment_attrs(d.done),
+    ),
+    ClassDashSensorDescription(
         key="announcements",
         translation_key="announcements",
         icon="mdi:bullhorn",
@@ -129,6 +138,25 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         else None,
         attrs_fn=lambda d: {"minutes_ago": d.status["minutesAgo"]},
     ),
+    *(
+        ClassDashSensorDescription(
+            key=f"check_status_{platform}",
+            translation_key=f"check_status_{platform}",
+            icon=icon,
+            device_class=SensorDeviceClass.ENUM,
+            options=["ok", "problem", "unknown"],
+            value_fn=lambda d, platform=platform: d.check_status[platform]["status"],
+            attrs_fn=lambda d, platform=platform: {
+                "at": d.check_status[platform]["at"],
+                "detail": d.check_status[platform]["detail"],
+            },
+        )
+        for platform, icon in (
+            ("classroom", "mdi:google-classroom"),
+            ("canvas", "mdi:school"),
+            ("edpuzzle", "mdi:movie-play"),
+        )
+    ),
 )
 
 
@@ -141,6 +169,7 @@ CLASS_SENSOR_ICONS = {
     "due_soon": "mdi:book-clock",
     "overdue": "mdi:book-alert",
     "ahead": "mdi:book-clock-outline",
+    "done": "mdi:book-check",
 }
 
 

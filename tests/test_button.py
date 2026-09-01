@@ -18,7 +18,10 @@ from custom_components.classdash.api import (
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from .conftest import bundle_extras
+
 FAKE_BUNDLE = {
+    **bundle_extras(),
     "status": {
         "collectedAt": "2026-08-30T12:00:00.000Z",
         "minutesAgo": 1,
@@ -27,6 +30,7 @@ FAKE_BUNDLE = {
         "dueSoon": 0,
         "overdue": 0,
         "ahead": 0,
+        "done": 0,
         "announcements": 0,
         "removed": 0,
         "language": "en",

@@ -23,6 +23,23 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Enable custom integrations for every test."""
 
 
+def unknown_check_status() -> dict[str, dict[str, None | str]]:
+    """The three-platform check-status shape, all "unknown" — a
+    reasonable default for tests that don't care about pipeline health
+    specifically. Matches checkStatus()'s own UNKNOWN constant in
+    25-check-status.js."""
+    unknown = {"status": "unknown", "at": None, "detail": None}
+    return {"classroom": dict(unknown), "canvas": dict(unknown), "edpuzzle": dict(unknown)}
+
+
+def bundle_extras() -> dict:
+    """The newer top-level snapshot keys (done/check-status/virtual) that
+    every bundle fixture needs now that ClassDashData requires them —
+    spread into a test's own bundle dict so each one doesn't have to
+    repeat this shape by hand."""
+    return {"done": [], "check-status": unknown_check_status(), "virtual": []}
+
+
 @dataclass
 class GeneratedCertificate:
     """A real, throwaway self-signed cert — same shape ClassDash's own

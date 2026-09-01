@@ -2,7 +2,8 @@
 
 Each class's due-soon, ahead, and overdue assignments become events on
 that class's own calendar, keyed on the same due date/time ClassDash
-already computed. Announcements have no due date and aren't events.
+already computed — plus any virtual reminder assigned to that class.
+Announcements have no due date and aren't events.
 """
 
 from __future__ import annotations
@@ -18,7 +19,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names, is_hidden
+from .coordinator import (
+    ClassDashConfigEntry,
+    ClassDashCoordinator,
+    class_names,
+    is_done,
+    is_hidden,
+)
 from .devices import class_device_info, class_unique_id
 
 # Same reasoning as sensor.py's PARALLEL_UPDATES: everything here reads
@@ -81,7 +88,8 @@ def _assignment_to_event(item: dict[str, Any]) -> CalendarEvent | None:
 
 
 class ClassDashClassCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEntity):
-    """One class's assignments (due-soon + ahead + overdue), as events."""
+    """One class's assignments (due-soon + ahead + overdue) plus any
+    virtual reminder assigned to it, as events."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "assignments"
@@ -100,9 +108,16 @@ class ClassDashClassCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEn
 
     def _events(self) -> list[CalendarEvent]:
         data = self.coordinator.data
+        # /api/virtual mixes every state (overdue/upcoming/undated/done)
+        # into one list, unlike real assignments where each state is its
+        # own separate bucket — done ones are excluded here explicitly so
+        # a completed reminder doesn't linger on the calendar the same
+        # way a real done assignment structurally can't (it's not in
+        # due_soon/ahead/overdue to begin with).
+        virtual = [x for x in data.virtual if not is_done(x)]
         items = [
             x
-            for x in (*data.due_soon, *data.ahead, *data.overdue)
+            for x in (*data.due_soon, *data.ahead, *data.overdue, *virtual)
             if x.get("class") == self._class_name and not is_hidden(x)
         ]
         events = [e for x in items if (e := _assignment_to_event(x)) is not None]

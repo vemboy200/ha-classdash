@@ -26,8 +26,11 @@ from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from custom_components.classdash.coordinator import ClassDashCoordinator
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from .conftest import bundle_extras
+
 BUNDLE_1 = {
-    "status": {"dueSoon": 1, "overdue": 0, "ahead": 0, "announcements": 0},
+    **bundle_extras(),
+    "status": {"dueSoon": 1, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
     "due-soon": [{"title": "first"}],
     "ahead": [],
     "overdue": [],
@@ -35,7 +38,8 @@ BUNDLE_1 = {
     "classes": [],
 }
 BUNDLE_2 = {
-    "status": {"dueSoon": 2, "overdue": 0, "ahead": 0, "announcements": 0},
+    **bundle_extras(),
+    "status": {"dueSoon": 2, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
     "due-soon": [{"title": "first"}, {"title": "second"}],
     "ahead": [],
     "overdue": [],

@@ -38,9 +38,22 @@
       "due_soon": { "name": "Due soon" },
       "overdue": { "name": "Overdue" },
       "ahead": { "name": "Ahead" },
+      "done": { "name": "Done" },
       "announcements": { "name": "Announcements" },
       "classes": { "name": "Classes" },
-      "last_collected": { "name": "Last collected" }
+      "last_collected": { "name": "Last collected" },
+      "check_status_classroom": {
+        "name": "Classroom status",
+        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+      },
+      "check_status_canvas": {
+        "name": "Canvas status",
+        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+      },
+      "check_status_edpuzzle": {
+        "name": "Edpuzzle status",
+        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+      }
     },
     "calendar": {
       "assignments": { "name": "Assignments" }

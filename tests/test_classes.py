@@ -16,6 +16,8 @@ from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
 from custom_components.classdash.devices import class_unique_id
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from .conftest import bundle_extras
+
 
 def _assignment(class_name: str, title: str, due: str, item_id: str, tags=()) -> dict:
     return {
@@ -37,25 +39,32 @@ def _status(**counts) -> dict:
         "dueSoon": counts.get("due_soon", 0),
         "overdue": counts.get("overdue", 0),
         "ahead": counts.get("ahead", 0),
+        "done": counts.get("done", 0),
         "announcements": counts.get("announcements", 0),
         "removed": 0,
         "language": "en",
     }
 
 
-def _bundle(due_soon=(), ahead=(), overdue=(), announcements=(), classes=()) -> dict:
+def _bundle(
+    due_soon=(), ahead=(), overdue=(), done=(), announcements=(), classes=(), virtual=()
+) -> dict:
     return {
+        **bundle_extras(),
         "status": _status(
             due_soon=len(due_soon),
             ahead=len(ahead),
             overdue=len(overdue),
+            done=len(done),
             announcements=len(announcements),
         ),
         "due-soon": list(due_soon),
         "ahead": list(ahead),
         "overdue": list(overdue),
+        "done": list(done),
         "announcements": list(announcements),
         "classes": list(classes),
+        "virtual": list(virtual),
     }
 
 

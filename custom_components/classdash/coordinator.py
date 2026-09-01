@@ -41,6 +41,7 @@ class ClassDashData:
     due_soon: list[dict[str, Any]]
     ahead: list[dict[str, Any]]
     overdue: list[dict[str, Any]]
+    done: list[dict[str, Any]]
     announcements: list[dict[str, Any]]
     # {"name", "dueSoon", "ahead", "overdue"} per class — the merged
     # cross-platform roster from /api/classes. Empty-count classes only
@@ -48,6 +49,16 @@ class ClassDashData:
     # on (off by default); see class_names' docstring for why this alone
     # still isn't a complete source of class names on its own.
     classes: list[dict[str, Any]]
+    # {"classroom": {...}, "canvas": {...}, "edpuzzle": {...}}, each
+    # {"status": "ok"|"problem"|"unknown", "at": iso|None, "detail": str|None}
+    # — pipeline health, not "what's due"; see /api/check-status.
+    check_status: dict[str, dict[str, Any]]
+    # Reminders the user typed in themselves, not read from any platform
+    # — /api/virtual. Optionally assigned to a class (`class` may be
+    # None), mixed together regardless of state (overdue/upcoming/
+    # undated/done all in one list, unlike real assignments which each
+    # have their own bucket/handle) — is_done()/is_hidden() sort that out.
+    virtual: list[dict[str, Any]]
 
 
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
@@ -81,7 +92,14 @@ def class_names(data: ClassDashData) -> set[str]:
     from_roster = {c["name"] for c in data.classes if c.get("status") != "orphaned"}
     from_items = {
         name
-        for item in (*data.due_soon, *data.ahead, *data.overdue, *data.announcements)
+        for item in (
+            *data.due_soon,
+            *data.ahead,
+            *data.overdue,
+            *data.done,
+            *data.announcements,
+            *data.virtual,
+        )
         if (name := item.get("class"))
     }
     return (from_roster | from_items) - orphaned
@@ -95,6 +113,14 @@ def is_hidden(item: dict[str, Any]) -> bool:
     return "hidden" in item.get("tags", [])
 
 
+def is_done(item: dict[str, Any]) -> bool:
+    """Turned in / marked done. Used to keep completed virtual reminders
+    off a class's calendar — /api/virtual mixes every state into one
+    list, unlike real assignments where "done" is already its own
+    separate bucket that due/ahead/overdue structurally can't contain."""
+    return "done" in item.get("tags", [])
+
+
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
     """The stream's top-level keys are each REST handle's path with the
     leading /api/ stripped — so the list endpoints keep their hyphens
@@ -104,8 +130,11 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         due_soon=bundle["due-soon"],
         ahead=bundle["ahead"],
         overdue=bundle["overdue"],
+        done=bundle["done"],
         announcements=bundle["announcements"],
         classes=bundle["classes"],
+        check_status=bundle["check-status"],
+        virtual=bundle["virtual"],
     )
 
 
