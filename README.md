@@ -104,19 +104,20 @@ due or announced for it, same as before.
 | Due soon / Overdue / Ahead | That class's own counts, same attribute pattern as the main device |
 | Assignments (calendar) | That class's due-soon + ahead + overdue assignments as calendar events — each due date/time becomes a 30-minute event; overdue ones stay on the calendar too, they just don't show as the "next" event |
 
-A class's entities are created once and kept — a class with nothing
-currently due still has its device, its sensors just read 0 and its
-calendar shows no upcoming events, rather than flickering in and out as
-things get assigned and turned in.
-
-**Orphaned classes never get a device in the first place.** ClassDash
-tags each class in its roster `"known"` or `"orphaned"` — orphaned means
-the platform doesn't actually list it any more (a real class transfer,
-or a class hidden on Classroom's own side), even if old data for it is
-still lying around. This integration skips those entirely, even if they
-still have items sitting in due/overdue. A device already created
-*before* a class became orphaned isn't cleaned up automatically, though
-— remove it by hand from Settings → Devices & Services if that happens.
+A class's entities aren't tied to whether anything's currently due —
+zero due items just means the sensors read 0 and the calendar shows no
+upcoming events, not that the device disappears. What actually removes a
+class's device is the class itself going away: **ClassDash tags each
+class in its roster `"known"` or `"orphaned"`** (a real class transfer,
+or a class hidden on Classroom's own side, even though old data for it
+is still lying around) — an orphaned class never gets a device in the
+first place, even if it still has lingering items in due/overdue, and a
+device that already existed gets removed automatically the next time
+ClassDash pushes an update. The same applies to a class that becomes
+excluded, or goes stale, in ClassDash's own settings — it simply stops
+appearing, and its device goes with it. If the class ever comes back
+(re-enrolled, un-excluded), its device is recreated the same way it was
+the first time.
 
 **Hidden/dismissed items don't count or show up.** ClassDash's API no
 longer filters these out itself (everything comes back tagged instead,

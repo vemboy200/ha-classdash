@@ -5,12 +5,14 @@ from __future__ import annotations
 import aiohttp
 
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator
+from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
+from .devices import stale_class_device_ids
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BUTTON]
 
@@ -34,6 +36,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
 
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Classes change over time — a class that goes orphaned, stale, or
+    # excluded in ClassDash itself should stop having a device here too,
+    # not linger forever. sensor.py/calendar.py each handle *adding*
+    # entities for a class that's newly showing up; this is the one place
+    # that handles a class *disappearing*, since removing a device is a
+    # registry-level operation that doesn't belong to either platform
+    # specifically, and doing it once here avoids both platforms racing
+    # to remove (or worse, disagreeing about) the same device.
+    device_reg = dr.async_get(hass)
+
+    @callback
+    def _remove_stale_class_devices() -> None:
+        if coordinator.data is None:
+            return
+        current = class_names(coordinator.data)
+        for device_id in stale_class_device_ids(hass, entry, current):
+            device_reg.async_remove_device(device_id)
+
+    _remove_stale_class_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_remove_stale_class_devices))
 
     return True
 

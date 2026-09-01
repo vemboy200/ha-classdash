@@ -12,11 +12,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import MAX_LIST_ATTRIBUTES
+from .const import DOMAIN, MAX_LIST_ATTRIBUTES
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
@@ -155,20 +156,28 @@ async def async_setup_entry(
         for description in SENSOR_DESCRIPTIONS
     )
 
-    known_classes: set[str] = set()
+    ent_reg = er.async_get(hass)
 
     @callback
     def _add_new_class_sensors() -> None:
-        """Give any class that's shown up for the first time its three
-        count sensors. Classes only ever get added here, never removed —
-        see class_names' docstring for why a currently-empty class still
-        keeps its device rather than flickering in and out."""
+        """Give any class that doesn't already have sensors its three
+        count sensors. Checks the entity registry directly rather than a
+        locally-tracked "already added" set — a class whose device was
+        removed by __init__.py's stale-device cleanup and then reappears
+        needs to be re-added, and a set that only ever grows would
+        wrongly think it's still there."""
         if coordinator.data is None:
             return
-        new = class_names(coordinator.data) - known_classes
+        new = {
+            name
+            for name in class_names(coordinator.data)
+            if ent_reg.async_get_entity_id(
+                "sensor", DOMAIN, f"{class_unique_id(entry, name)}_due_soon"
+            )
+            is None
+        }
         if not new:
             return
-        known_classes.update(new)
         async_add_entities(
             ClassDashClassSensor(coordinator, entry, name, key)
             for name in sorted(new)

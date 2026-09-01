@@ -321,3 +321,118 @@ async def test_hidden_items_excluded_from_per_class_count_and_calendar(
         "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
     )
     assert hass.states.get(calendar_id).attributes["message"] == "Visible one"
+
+
+async def test_class_device_removed_when_class_disappears(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """A class that stops appearing anywhere (orphaned, excluded, gone
+    stale on ClassDash's own side) should have its device — and by
+    extension all its entities — actually removed, not just left
+    forever."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    with_physics = _bundle(
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T00:00:00+00:00", "p1")]
+    )
+    without_physics = _bundle()
+    gone = asyncio.Event()
+
+    async def fake_stream():
+        yield StreamEvent("update", with_physics)
+        yield StreamEvent("update", without_physics)
+        gone.set()
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await asyncio.wait_for(gone.wait(), timeout=2)
+        await hass.async_block_till_done()
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    assert (
+        dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+        is None
+    )
+    assert (
+        ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{class_unique_id(entry, 'Physics')}_due_soon"
+        )
+        is None
+    )
+    assert (
+        ent_reg.async_get_entity_id(
+            "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
+        )
+        is None
+    )
+    # The main device must never be swept up in this.
+    assert dev_reg.async_get_device({(DOMAIN, entry.unique_id)}) is not None
+
+
+async def test_class_device_recreated_after_disappearing_and_reappearing(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """The actual bug this is a regression test for: the "add new class"
+    logic used to track "classes I've ever added" in a plain set that
+    only ever grew, so once a class's device was removed, a later
+    reappearance was silently ignored forever — it now checks the entity
+    registry directly instead, which reflects reality."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    appears = _bundle(
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T00:00:00+00:00", "p1")]
+    )
+    disappears = _bundle()
+    reappears = _bundle(
+        due_soon=[_assignment("Physics", "New assignment", "2026-09-20T00:00:00+00:00", "p2")]
+    )
+    gone = asyncio.Event()
+    resume_after_check = asyncio.Event()
+    back = asyncio.Event()
+
+    async def fake_stream():
+        yield StreamEvent("update", appears)
+        yield StreamEvent("update", disappears)
+        gone.set()
+        # A genuine suspension point (unlike `gone.set(); await gone.wait()`
+        # on the same already-set event, which wouldn't actually block) —
+        # without this, nothing stops the generator from racing straight
+        # through to "reappears" before the test below ever gets a chance
+        # to observe the removed state in between.
+        await resume_after_check.wait()
+        yield StreamEvent("update", reappears)
+        back.set()
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await asyncio.wait_for(gone.wait(), timeout=2)
+        await hass.async_block_till_done()
+
+        dev_reg = dr.async_get(hass)
+        assert (
+            dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+            is None
+        )
+
+        resume_after_check.set()
+        await asyncio.wait_for(back.wait(), timeout=2)
+        await hass.async_block_till_done()
+
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, f"{class_unique_id(entry, 'Physics')}_due_soon"
+    )
+    assert entity_id is not None
+    assert hass.states.get(entity_id).state == "1"

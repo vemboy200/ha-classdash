@@ -12,10 +12,12 @@ from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .const import DOMAIN
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names, is_hidden
 from .devices import class_device_info, class_unique_id
 
@@ -37,16 +39,26 @@ async def async_setup_entry(
 ) -> None:
     """Set up one calendar per class, added as new classes show up."""
     coordinator = entry.runtime_data
-    known_classes: set[str] = set()
+    ent_reg = er.async_get(hass)
 
     @callback
     def _add_new_class_calendars() -> None:
+        """Checks the entity registry directly rather than a locally
+        tracked set — see sensor.py's own _add_new_class_sensors for why:
+        a class whose device got removed and later reappears needs to be
+        re-added, which an add-only set would miss."""
         if coordinator.data is None:
             return
-        new = class_names(coordinator.data) - known_classes
+        new = {
+            name
+            for name in class_names(coordinator.data)
+            if ent_reg.async_get_entity_id(
+                "calendar", DOMAIN, f"{class_unique_id(entry, name)}_calendar"
+            )
+            is None
+        }
         if not new:
             return
-        known_classes.update(new)
         async_add_entities(
             ClassDashClassCalendar(coordinator, entry, name) for name in sorted(new)
         )

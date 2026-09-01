@@ -126,13 +126,7 @@ rules:
   repair-issues:
     status: exempt
     comment: No actionable repair scenario currently identified.
-  stale-devices:
-    status: todo
-    comment: class_names() now excludes classes /api/classes marks "orphaned"
-      (a real transfer, or hidden on Classroom's own side) from getting NEW
-      devices — but a device already created before a class became orphaned
-      is never actively removed. Still additive-only for devices that already
-      exist. See coordinator.py's class_names().
+  stale-devices: done
 
   # Platinum
   async-dependency:
