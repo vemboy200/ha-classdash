@@ -134,13 +134,35 @@ so a client can decide) — this integration filters `"hidden"`-tagged
 items out of every count, attribute list, and calendar, so a dismissed
 assignment behaves the same as it always did: gone.
 
+## Services
+
+Four service actions dismiss or restore a specific assignment — the
+same thing clicking "hide" or "not urgent" on ClassDash's own summary
+page does:
+
+| Service | What it does |
+|---|---|
+| `classdash.hide` | Dismisses an assignment — hidden ones don't count or show up anywhere in this integration |
+| `classdash.unhide` | Reverses `hide` |
+| `classdash.mute` | Marks "not urgent" — still counts, just doesn't badge/notify |
+| `classdash.unmute` | Reverses `mute` |
+
+Each takes an `id` (find it in the assignment's own list attribute on
+any of the Due soon/Overdue/Ahead/Done sensors) and an optional
+`config_entry_id`, only needed if more than one ClassDash server is
+configured. These act on an assignment *id*, not an entity — an
+assignment isn't its own HA entity, it's a list item inside a sensor's
+attribute, so there's no natural entity for a hide/mute button to
+attach to.
+
 ## What's read-only here
 
 Virtual reminders (assignments you type into ClassDash yourself) show up
 on the calendar of whatever class they're assigned to, but only for
-reading — creating, editing, marking done, hiding, or deleting one is
-still ClassDash-side only, same as hiding/muting a real assignment. None
-of that has an equivalent here yet.
+reading — creating, editing, marking done, hiding, or deleting *those*
+(as opposed to a real assignment, which the services above do cover) is
+still ClassDash-side only. Pushing a ClassDash setting from Home
+Assistant (`/api/settings`) isn't built either.
 
 ## Diagnostics
 

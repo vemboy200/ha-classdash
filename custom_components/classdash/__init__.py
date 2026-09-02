@@ -8,13 +8,25 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
 from .devices import stale_class_device_ids
+from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BUTTON]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the hide/unhide/mute/unmute services.
+
+    Domain-wide, not per config entry — see services.py's own comment.
+    Runs once regardless of how many ClassDash entries get added later.
+    """
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) -> bool:

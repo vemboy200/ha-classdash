@@ -63,5 +63,63 @@
       "reload": { "name": "Reload" },
       "check": { "name": "Check now" }
     }
+  },
+  "services": {
+    "hide": {
+      "name": "Hide assignment",
+      "description": "Dismisses an assignment — the same \"hide\" a click on ClassDash's own summary page does.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Assignment ID",
+          "description": "The id field from the assignment's own list attribute (e.g. on the Overdue sensor)."
+        }
+      }
+    },
+    "unhide": {
+      "name": "Unhide assignment",
+      "description": "Reverses hide — the assignment counts and shows up again.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Assignment ID",
+          "description": "The id field from the assignment's own list attribute."
+        }
+      }
+    },
+    "mute": {
+      "name": "Mute assignment",
+      "description": "Marks an assignment \"not urgent\" — it still counts, it just won't badge or notify.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Assignment ID",
+          "description": "The id field from the assignment's own list attribute."
+        }
+      }
+    },
+    "unmute": {
+      "name": "Unmute assignment",
+      "description": "Reverses mute.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Assignment ID",
+          "description": "The id field from the assignment's own list attribute."
+        }
+      }
+    }
   }
 }

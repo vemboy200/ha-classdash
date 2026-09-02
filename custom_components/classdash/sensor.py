@@ -38,10 +38,14 @@ def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
     Excludes hidden items — /api/due-soon etc. no longer filter those out
     server-side (everything goes out, tagged, per CONTRIBUTING.md), so
     without this the preview list would drift from the sensor's own count
-    (which reads /api/status's already-filtered numbers)."""
+    (which reads /api/status's already-filtered numbers). Includes `id`
+    specifically so it's discoverable for the classdash.hide/mute
+    services, which need it and have no other reasonable way to show it.
+    """
     visible = [x for x in items if not is_hidden(x)]
     trimmed = [
         {
+            "id": x.get("id"),
             "title": x.get("title"),
             "class": x.get("class"),
             "due": x.get("due"),

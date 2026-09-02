@@ -1,8 +1,9 @@
 rules:
   # Bronze
   action-setup:
-    status: exempt
-    comment: No custom service actions — nothing to register.
+    status: done
+    comment: hide/unhide/mute/unmute registered in async_setup (services.py),
+      not async_setup_entry — they're not scoped to one config entry.
   appropriate-polling:
     status: exempt
     comment: local_push via /api/stream, no polling interval to set.
@@ -26,8 +27,9 @@ rules:
       Trusted Publishing) rather than trivially, the way pyowershades did before
       its own core PR.
   docs-actions:
-    status: exempt
-    comment: No custom service actions.
+    status: done
+    comment: hide/unhide/mute/unmute documented in the README, with why they're
+      services rather than entity actions (no natural entity to attach one to).
   docs-conditions:
     status: exempt
     comment: No device conditions.
@@ -49,8 +51,11 @@ rules:
 
   # Silver
   action-exceptions:
-    status: exempt
-    comment: No custom service actions.
+    status: done
+    comment: ServiceValidationError for bad input (no/ambiguous config entry, id
+      not found isn't distinguishable from other 400s though — see
+      exception-translations below), HomeAssistantError for connection/auth
+      failures reaching ClassDash itself.
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
@@ -119,8 +124,11 @@ rules:
     comment: Nothing noisy or niche enough to warrant being disabled by default.
   entity-translations: done
   exception-translations:
-    status: exempt
-    comment: No HomeAssistantError currently raised from an entity or service call.
+    status: todo
+    comment: services.py and button.py both raise HomeAssistantError/
+      ServiceValidationError with plain string messages now, not
+      translation_domain/translation_key — functionally fine, just not
+      translated.
   icon-translations:
     status: todo
     comment: Icons are hardcoded (_attr_icon / description icon=) rather than

@@ -145,12 +145,13 @@ class ClassDashClient:
         except aiohttp.ClientError as err:
             raise ClassDashConnectionError(str(err)) from err
 
-    async def _post(self, path: str) -> None:
+    async def _post(self, path: str, body: dict[str, Any] | None = None) -> None:
         try:
             async with self._session.post(
                 f"{self._base}{path}",
                 headers={"Authorization": f"Bearer {self._token}"},
                 ssl=self._ssl_context,
+                json=body,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status == 401:
@@ -178,6 +179,22 @@ class ClassDashClient:
         """Start the full collection pass (+ Edpuzzle, ~1 min). Same
         fire-and-forget shape as async_reload."""
         await self._post("/api/check")
+
+    async def async_hide(self, item_id: str) -> None:
+        """Dismiss an assignment — the same "hide" a click on ClassDash's
+        own summary page does. `item_id` is whatever id the assignment
+        came back with (e.g. from /api/overdue)."""
+        await self._post("/api/hide", {"id": item_id})
+
+    async def async_unhide(self, item_id: str) -> None:
+        await self._post("/api/unhide", {"id": item_id})
+
+    async def async_mute(self, item_id: str) -> None:
+        """Mark "not urgent" — still counted, just not badged/notified on."""
+        await self._post("/api/mute", {"id": item_id})
+
+    async def async_unmute(self, item_id: str) -> None:
+        await self._post("/api/unmute", {"id": item_id})
 
     async def async_stream_updates(self) -> AsyncIterator[StreamEvent]:
         """Connect to /api/stream and yield each event as it arrives.

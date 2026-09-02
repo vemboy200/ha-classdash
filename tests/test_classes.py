@@ -325,6 +325,10 @@ async def test_hidden_items_excluded_from_per_class_count_and_calendar(
     assert [a["title"] for a in overdue_state.attributes["assignments"]] == [
         "Visible one"
     ]
+    # id is included specifically so it's discoverable for the
+    # classdash.hide/mute services, which need it and have no other
+    # reasonable way to show it.
+    assert overdue_state.attributes["assignments"][0]["id"] == "v1"
 
     calendar_id = ent_reg.async_get_entity_id(
         "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"

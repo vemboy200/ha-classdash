@@ -168,6 +168,77 @@ async def test_async_check_server_error_raises_connection_error(
                 await client.async_check()
 
 
+async def test_async_hide_posts_id_in_body(cert_factory, socket_enabled) -> None:
+    received: dict = {}
+
+    async def hide(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        received["auth"] = request.headers.get("Authorization")
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/hide", hide)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session, token="secret-token")
+            assert await client.async_hide("abc123") is None
+
+    assert received == {"body": {"id": "abc123"}, "auth": "Bearer secret-token"}
+
+
+@pytest.mark.parametrize(
+    ("method_name", "path"),
+    [
+        ("async_unhide", "/api/unhide"),
+        ("async_mute", "/api/mute"),
+        ("async_unmute", "/api/unmute"),
+    ],
+)
+async def test_write_methods_post_id_to_the_right_path(
+    cert_factory, socket_enabled, method_name, path
+) -> None:
+    received: dict = {}
+
+    async def handler(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post(path, handler)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await getattr(client, method_name)("x1") is None
+
+    assert received == {"body": {"id": "x1"}}
+
+
+async def test_async_hide_401_raises_auth_error(cert_factory, socket_enabled) -> None:
+    app = web.Application()
+    app.router.add_post("/api/hide", _unauthorized)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashAuthError):
+                await client.async_hide("x1")
+
+
+async def test_async_mute_server_error_raises_connection_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/mute", _server_error)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashConnectionError):
+                await client.async_mute("x1")
+
+
 async def test_async_stream_updates_yields_parsed_events(
     cert_factory, socket_enabled
 ) -> None:

@@ -1,0 +1,51 @@
+hide:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: classdash
+    id:
+      required: true
+      example: "a1b2c3"
+      selector:
+        text:
+
+unhide:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: classdash
+    id:
+      required: true
+      example: "a1b2c3"
+      selector:
+        text:
+
+mute:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: classdash
+    id:
+      required: true
+      example: "a1b2c3"
+      selector:
+        text:
+
+unmute:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: classdash
+    id:
+      required: true
+      example: "a1b2c3"
+      selector:
+        text:
