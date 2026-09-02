@@ -16,11 +16,16 @@ otherwise look like it finishes the job.
 from __future__ import annotations
 
 import dataclasses
+import re
 from typing import Any
+from urllib.parse import urlparse
+
+import aiohttp
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -29,6 +34,24 @@ from .coordinator import ClassDashConfigEntry, ClassDashCoordinator
 from .devices import main_device_info
 
 PARALLEL_UPDATES = 0
+
+# Matches the path of exactly the release_url ClassDash's own update
+# check builds — https://github.com/<owner>/<repo>/releases/tag/<tag> —
+# to pull owner/repo/tag back out for GitHub's REST API, which wants
+# them as separate path segments rather than a release page URL. The
+# host is checked separately (not folded into this pattern) — this
+# integration only ever talks to ClassDash's own home API otherwise, so
+# treating update_status["url"] as trusted enough to build a request to
+# whatever host it names, sight unseen, isn't a chance worth taking.
+_RELEASE_URL_PATH_RE = re.compile(r"^/([^/]+)/([^/]+)/releases/tag/(.+)$")
+
+
+def _parse_github_release_url(url: str) -> tuple[str, str, str] | None:
+    parsed = urlparse(url)
+    if parsed.netloc != "github.com":
+        return None
+    match = _RELEASE_URL_PATH_RE.match(parsed.path)
+    return match.groups() if match else None  # type: ignore[return-value]
 
 
 async def async_setup_entry(
@@ -46,7 +69,9 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "app_update"
     _attr_supported_features = (
-        UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
+        UpdateEntityFeature.INSTALL
+        | UpdateEntityFeature.PROGRESS
+        | UpdateEntityFeature.RELEASE_NOTES
     )
     _attr_release_summary = (
         "Only downloads the release in the background — actually "
@@ -97,6 +122,36 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
                 f"Could not reach ClassDash's home API: {err}"
             ) from err
         await self._async_refresh_status()
+
+    async def async_release_notes(self) -> str | None:
+        """The actual GitHub release body (markdown) for latest_version.
+
+        ClassDash's own /api/update-status only ever gives a version
+        number and a link to the release page (release_url) — not the
+        notes themselves, so this reads them straight from GitHub's REST
+        API using the same owner/repo/tag release_url already names.
+        Best-effort: any failure (offline, rate-limited, a release
+        that's since been deleted or renamed) just means no notes show
+        up in the more-info dialog — release_url is still there as a
+        plain link either way, this is purely an enhancement over it.
+        """
+        parsed = _parse_github_release_url(self.release_url) if self.release_url else None
+        if parsed is None:
+            return None
+        owner, repo, tag = parsed
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(
+                f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}",
+                headers={"Accept": "application/vnd.github+json"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+        except aiohttp.ClientError:
+            return None
+        return data.get("body")
 
     async def _async_refresh_status(self) -> None:
         """update-status.json isn't watched by /api/stream (see
