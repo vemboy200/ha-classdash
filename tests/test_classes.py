@@ -88,7 +88,7 @@ async def test_class_devices_created_with_correct_entities_and_linkage(
     entry.add_to_hass(hass)
 
     bundle = _bundle(
-        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")],
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T23:59:00+00:00", "p1")],
         overdue=[
             _assignment(
                 "AP Chem, Period 2!", "Worksheet", "2026-08-20T23:59:00+00:00", "c1"
@@ -155,11 +155,11 @@ async def test_a_class_appearing_later_gets_its_own_entities(
     entry.add_to_hass(hass)
 
     first = _bundle(
-        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")]
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T23:59:00+00:00", "p1")]
     )
     second = _bundle(
         due_soon=[
-            _assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1"),
+            _assignment("Physics", "Lab report", "2026-09-10T23:59:00+00:00", "p1"),
             _assignment("Biology", "Reading", "2026-09-02T23:59:00+00:00", "b1"),
         ]
     )
@@ -198,7 +198,7 @@ async def test_class_with_nothing_due_still_gets_a_device(
     entry.add_to_hass(hass)
 
     bundle = _bundle(
-        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")],
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T23:59:00+00:00", "p1")],
         classes=[
             {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0},
             {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0},
@@ -247,7 +247,7 @@ async def test_orphaned_class_gets_no_device_even_with_lingering_items(
     entry.add_to_hass(hass)
 
     bundle = _bundle(
-        due_soon=[_assignment("Physics", "Lab report", "2026-09-01T23:59:00+00:00", "p1")],
+        due_soon=[_assignment("Physics", "Lab report", "2026-09-10T23:59:00+00:00", "p1")],
         overdue=[_assignment("Old Class", "Ancient worksheet", "2020-01-01T00:00:00+00:00", "o1")],
         classes=[
             {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known"},

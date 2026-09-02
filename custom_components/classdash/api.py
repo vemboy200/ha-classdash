@@ -196,6 +196,32 @@ class ClassDashClient:
     async def async_unmute(self, item_id: str) -> None:
         await self._post("/api/unmute", {"id": item_id})
 
+    async def async_get_update_status(self) -> dict[str, Any]:
+        """Whatever ClassDash's own macOS-app update check last found —
+        see CONTRIBUTING.md's "Update check" section. Used to refresh the
+        update entity right after a dismiss/download: unlike a real
+        collection pass, writing update-status.json doesn't trigger an
+        /api/stream push on its own (that file isn't one of the two files
+        watchForChanges() watches), so nothing else would notice."""
+        return await self._get("/api/update-status")
+
+    async def async_dismiss_update(self, version: str) -> None:
+        """Mark `version` seen-and-dismissed — the same thing ClassDash's
+        own update banner's dismiss button does. A no-op server-side if no
+        check has ever run yet."""
+        await self._post("/api/update-status/dismiss", {"version": version})
+
+    async def async_download_update(self) -> None:
+        """Start downloading the latest release's .dmg in the background.
+
+        Download-only, same "started, not finished" contract as
+        async_reload/async_check: actually installing it — replacing the
+        running app and relaunching — stays gated behind a native
+        confirmation on the Mac itself and is never reachable through the
+        API at all (see 26-update-check.js's own header comment).
+        """
+        await self._post("/api/update-status/download")
+
     async def async_stream_updates(self) -> AsyncIterator[StreamEvent]:
         """Connect to /api/stream and yield each event as it arrives.
 

@@ -39,6 +39,7 @@ def _data(
         classes=list(classes),
         check_status={},
         virtual=list(virtual),
+        update_status={},
     )
 
 

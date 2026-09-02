@@ -49,6 +49,7 @@ def test_event_is_the_soonest_not_yet_ended() -> None:
         classes=[],
         check_status={},
         virtual=[],
+        update_status={},
     )
     event = _calendar(data).event
     assert event is not None
@@ -67,6 +68,7 @@ def test_event_is_none_when_everything_is_over() -> None:
         classes=[],
         check_status={},
         virtual=[],
+        update_status={},
     )
     assert _calendar(data).event is None
 
@@ -82,6 +84,7 @@ def test_event_ignores_other_classes() -> None:
         classes=[],
         check_status={},
         virtual=[],
+        update_status={},
     )
     assert _calendar(data).event is None
 
@@ -101,6 +104,7 @@ async def test_async_get_events_includes_overdue_in_range() -> None:
         classes=[],
         check_status={},
         virtual=[],
+        update_status={},
     )
     events = await _calendar(data).async_get_events(
         hass=None,
@@ -121,6 +125,7 @@ async def test_async_get_events_respects_the_range() -> None:
         classes=[],
         check_status={},
         virtual=[],
+        update_status={},
     )
     events = await _calendar(data).async_get_events(
         hass=None,

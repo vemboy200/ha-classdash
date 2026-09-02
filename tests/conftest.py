@@ -32,12 +32,30 @@ def unknown_check_status() -> dict[str, dict[str, None | str]]:
     return {"classroom": dict(unknown), "canvas": dict(unknown), "edpuzzle": dict(unknown)}
 
 
+def default_update_status() -> dict[str, None | bool]:
+    """/api/update-status' own shape before any check has ever run —
+    matches the fallback object 17-api.js's handler returns for
+    readUpdateStatus() is None."""
+    return {
+        "currentVersion": None,
+        "latestVersion": None,
+        "url": None,
+        "checkedAt": None,
+        "updateAvailable": False,
+    }
+
+
 def bundle_extras() -> dict:
-    """The newer top-level snapshot keys (done/check-status/virtual) that
-    every bundle fixture needs now that ClassDashData requires them —
-    spread into a test's own bundle dict so each one doesn't have to
-    repeat this shape by hand."""
-    return {"done": [], "check-status": unknown_check_status(), "virtual": []}
+    """The newer top-level snapshot keys (done/check-status/virtual/
+    update-status) that every bundle fixture needs now that ClassDashData
+    requires them — spread into a test's own bundle dict so each one
+    doesn't have to repeat this shape by hand."""
+    return {
+        "done": [],
+        "check-status": unknown_check_status(),
+        "virtual": [],
+        "update-status": default_update_status(),
+    }
 
 
 @dataclass

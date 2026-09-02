@@ -62,6 +62,9 @@
     "button": {
       "reload": { "name": "Reload" },
       "check": { "name": "Check now" }
+    },
+    "update": {
+      "app_update": { "name": "App update" }
     }
   },
   "services": {

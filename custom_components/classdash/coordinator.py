@@ -59,6 +59,17 @@ class ClassDashData:
     # undated/done all in one list, unlike real assignments which each
     # have their own bucket/handle) — is_done()/is_hidden() sort that out.
     virtual: list[dict[str, Any]]
+    # ClassDash's own macOS-app update check — /api/update-status.
+    # {"currentVersion", "latestVersion", "url", "checkedAt",
+    # "updateAvailable", "dismissedVersion"}, plus "downloading",
+    # "readyToInstall", "readyVersion", "downloadedPath" once a download
+    # has actually been attempted. All fields are None/False until the
+    # app's own check has run at least once. Unlike everything else in
+    # this snapshot, this can go stale between real pushes: writing
+    # update-status.json doesn't trigger a broadcast on its own (only the
+    # state/stream files are watched), so update.py refetches it directly
+    # after its own dismiss/download calls instead of waiting on one.
+    update_status: dict[str, Any]
 
 
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
@@ -135,6 +146,7 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         classes=bundle["classes"],
         check_status=bundle["check-status"],
         virtual=bundle["virtual"],
+        update_status=bundle["update-status"],
     )
 
 

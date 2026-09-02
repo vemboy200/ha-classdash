@@ -239,6 +239,97 @@ async def test_async_mute_server_error_raises_connection_error(
                 await client.async_mute("x1")
 
 
+async def test_async_get_update_status_success(cert_factory, socket_enabled) -> None:
+    status = {
+        "currentVersion": "0.3.0",
+        "latestVersion": "0.4.0",
+        "url": "https://example.com/release",
+        "checkedAt": "2026-09-01T00:00:00.000Z",
+        "updateAvailable": True,
+    }
+
+    async def update_status(request: web.Request) -> web.Response:
+        return web.json_response(status)
+
+    app = web.Application()
+    app.router.add_get("/api/update-status", update_status)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            result = await client.async_get_update_status()
+
+    assert result == status
+
+
+async def test_async_dismiss_update_posts_version_in_body(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+
+    async def dismiss(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        received["auth"] = request.headers.get("Authorization")
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/update-status/dismiss", dismiss)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session, token="secret-token")
+            assert await client.async_dismiss_update("0.4.0") is None
+
+    assert received == {"body": {"version": "0.4.0"}, "auth": "Bearer secret-token"}
+
+
+async def test_async_download_update_posts_with_no_body(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+
+    async def download(request: web.Request) -> web.Response:
+        received["method"] = request.method
+        received["body"] = await request.read()
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/update-status/download", download)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await client.async_download_update() is None
+
+    assert received == {"method": "POST", "body": b""}
+
+
+async def test_async_get_update_status_401_raises_auth_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_get("/api/update-status", _unauthorized)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashAuthError):
+                await client.async_get_update_status()
+
+
+async def test_async_download_update_server_error_raises_connection_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/update-status/download", _server_error)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashConnectionError):
+                await client.async_download_update()
+
+
 async def test_async_stream_updates_yields_parsed_events(
     cert_factory, socket_enabled
 ) -> None:

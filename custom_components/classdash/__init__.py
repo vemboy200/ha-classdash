@@ -16,7 +16,12 @@ from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
 from .devices import stale_class_device_ids
 from .services import async_setup_services
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.CALENDAR,
+    Platform.BUTTON,
+    Platform.UPDATE,
+]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

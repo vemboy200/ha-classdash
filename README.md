@@ -94,6 +94,7 @@ class:
 | Classroom / Canvas / Edpuzzle status | `ok`, `problem`, or `unknown` — pipeline health for that platform's last collection attempt, with `at` (when) and `detail` (error message, if any) as attributes. `unknown` covers "never checked yet" and "turned off" (no Canvas address configured, Edpuzzle disabled) alike |
 | Reload (button) | Starts the quick collection pass (Classroom + Canvas, ~17s) |
 | Check now (button) | Starts the full collection pass (+ Edpuzzle, ~1 min) |
+| App update | Tracks ClassDash's own macOS app version against its latest GitHub release — the same check `checkForUpdates()` already runs every 24 hours. Home Assistant's "Install" button only *starts the download* in the background; ClassDash's API has no way to actually install it (replace the running app and relaunch) — that step is deliberately only reachable via a native confirmation on the Mac itself. "Skip" hides the badge for that version in Home Assistant only, and doesn't touch ClassDash's own update banner |
 
 Both buttons only *start* the pass and return immediately — same as
 pressing the equivalent button on ClassDash's own summary page. There's
@@ -162,7 +163,11 @@ on the calendar of whatever class they're assigned to, but only for
 reading — creating, editing, marking done, hiding, or deleting *those*
 (as opposed to a real assignment, which the services above do cover) is
 still ClassDash-side only. Pushing a ClassDash setting from Home
-Assistant (`/api/settings`) isn't built either.
+Assistant (`/api/settings`) isn't built either. Same for ClassDash's own
+`dismissedVersion` on the update check — Home Assistant's own "Skip"
+button is entirely local to Home Assistant and doesn't call ClassDash's
+`/api/update-status/dismiss`, so dismissing there doesn't quiet
+ClassDash's own update banner.
 
 ## Diagnostics
 
