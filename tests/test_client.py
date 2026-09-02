@@ -21,6 +21,7 @@ from custom_components.classdash.api import (
     ClassDashAuthError,
     ClassDashClient,
     ClassDashConnectionError,
+    ClassDashValidationError,
     StreamEvent,
     build_ssl_context,
 )
@@ -328,6 +329,171 @@ async def test_async_download_update_server_error_raises_connection_error(
             client = _client_for(cert, port, session)
             with pytest.raises(ClassDashConnectionError):
                 await client.async_download_update()
+
+
+async def test_async_get_virtual_success(cert_factory, socket_enabled) -> None:
+    reminders = [{"id": "v-1", "title": "Bring slip", "class": "Physics", "due": None}]
+
+    async def virtual(request: web.Request) -> web.Response:
+        return web.json_response(reminders)
+
+    app = web.Application()
+    app.router.add_get("/api/virtual", virtual)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            result = await client.async_get_virtual()
+
+    assert result == reminders
+
+
+async def test_async_create_virtual_reminder_posts_and_returns_entry(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+    entry = {
+        "id": "v-abc123",
+        "title": "Bring slip",
+        "class": "Physics",
+        "due": "2026-09-10T14:30:00.000Z",
+    }
+
+    async def create(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        received["auth"] = request.headers.get("Authorization")
+        return web.json_response({"ok": True, "entry": entry})
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/create", create)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session, token="secret-token")
+            result = await client.async_create_virtual_reminder(
+                "Bring slip", "Physics", "2026-09-10T14:30:00+00:00"
+            )
+
+    assert result == {"ok": True, "entry": entry}
+    assert received == {
+        "body": {
+            "title": "Bring slip",
+            "class": "Physics",
+            "due": "2026-09-10T14:30:00+00:00",
+        },
+        "auth": "Bearer secret-token",
+    }
+
+
+async def test_async_create_virtual_reminder_omits_class_and_due(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+
+    async def create(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.json_response({"ok": True, "entry": {}})
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/create", create)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            await client.async_create_virtual_reminder("General reminder")
+
+    assert received["body"] == {"title": "General reminder", "class": None, "due": None}
+
+
+async def test_async_edit_virtual_reminder_posts_full_replacement(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+    entry = {"id": "v-abc123", "title": "Edited", "class": None, "due": None}
+
+    async def edit(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.json_response({"ok": True, "entry": entry})
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/edit", edit)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            result = await client.async_edit_virtual_reminder("v-abc123", "Edited")
+
+    assert result == {"ok": True, "entry": entry}
+    assert received["body"] == {
+        "id": "v-abc123",
+        "title": "Edited",
+        "class": None,
+        "due": None,
+    }
+
+
+async def test_async_create_virtual_reminder_400_raises_validation_error(
+    cert_factory, socket_enabled
+) -> None:
+    async def create(request: web.Request) -> web.Response:
+        return web.json_response({"ok": False, "why": "title is required"}, status=400)
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/create", create)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashValidationError, match="title is required"):
+                await client.async_create_virtual_reminder("")
+
+
+async def test_async_edit_virtual_reminder_400_error_shape_also_handled(
+    cert_factory, socket_enabled
+) -> None:
+    """The malformed-request-shape 400s (missing id entirely) use an
+    "error" key instead of "why" — both shapes need to surface a real
+    message, not a blank one."""
+
+    async def edit(request: web.Request) -> web.Response:
+        return web.json_response(
+            {"error": 'expected a JSON body: {"id": "..."}'}, status=400
+        )
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/edit", edit)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashValidationError, match="expected a JSON body"):
+                await client.async_edit_virtual_reminder("", "Edited")
+
+
+async def test_async_get_virtual_401_raises_auth_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_get("/api/virtual", _unauthorized)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashAuthError):
+                await client.async_get_virtual()
+
+
+async def test_async_create_virtual_reminder_server_error_raises_connection_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/virtual/create", _server_error)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashConnectionError):
+                await client.async_create_virtual_reminder("Bring slip")
 
 
 async def test_async_stream_updates_yields_parsed_events(

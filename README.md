@@ -156,18 +156,33 @@ assignment isn't its own HA entity, it's a list item inside a sensor's
 attribute, so there's no natural entity for a hide/mute button to
 attach to.
 
+Two more create and edit virtual reminders — the same thing typing one
+into ClassDash's own Reminders section does:
+
+| Service | What it does |
+|---|---|
+| `classdash.create_virtual_reminder` | Adds a reminder — `title` required, `class`/`due` both optional. Returns the created reminder, including its `id` |
+| `classdash.edit_virtual_reminder` | Changes an existing reminder's `title`/`class`/`due`, given its `id` |
+
+`title`/`class`/`due` are always sent together as a full replacement on
+`edit_virtual_reminder`, not merged — leaving `class` or `due` blank
+*clears* it, the same way ClassDash's own edit form always overwrites
+all three rather than diffing against what's there. A reminder's `id`
+is only ever surfaced by `create_virtual_reminder`'s own response (call
+it with "Response variable" set, in a script or automation, to capture
+it) — a reminder isn't its own HA entity, and unlike a real assignment's
+`id`, it doesn't show up in any sensor's attribute list either.
+
 ## What's read-only here
 
-Virtual reminders (assignments you type into ClassDash yourself) show up
-on the calendar of whatever class they're assigned to, but only for
-reading — creating, editing, marking done, hiding, or deleting *those*
-(as opposed to a real assignment, which the services above do cover) is
-still ClassDash-side only. Pushing a ClassDash setting from Home
-Assistant (`/api/settings`) isn't built either. Same for ClassDash's own
-`dismissedVersion` on the update check — Home Assistant's own "Skip"
-button is entirely local to Home Assistant and doesn't call ClassDash's
-`/api/update-status/dismiss`, so dismissing there doesn't quiet
-ClassDash's own update banner.
+Marking a virtual reminder done, hiding one, or deleting one outright —
+as opposed to creating or editing, which the two services above do
+cover — is still ClassDash-side only. Pushing a ClassDash setting from
+Home Assistant (`/api/settings`) isn't built either. Same for
+ClassDash's own `dismissedVersion` on the update check — Home
+Assistant's own "Skip" button is entirely local to Home Assistant and
+doesn't call ClassDash's `/api/update-status/dismiss`, so dismissing
+there doesn't quiet ClassDash's own update banner.
 
 ## Diagnostics
 

@@ -2,8 +2,9 @@ rules:
   # Bronze
   action-setup:
     status: done
-    comment: hide/unhide/mute/unmute registered in async_setup (services.py),
-      not async_setup_entry — they're not scoped to one config entry.
+    comment: hide/unhide/mute/unmute/create_virtual_reminder/edit_virtual_reminder
+      all registered in async_setup (services.py), not async_setup_entry —
+      none of them are scoped to one config entry.
   appropriate-polling:
     status: exempt
     comment: local_push via /api/stream, no polling interval to set.
@@ -28,8 +29,11 @@ rules:
       its own core PR.
   docs-actions:
     status: done
-    comment: hide/unhide/mute/unmute documented in the README, with why they're
-      services rather than entity actions (no natural entity to attach one to).
+    comment: hide/unhide/mute/unmute and create/edit_virtual_reminder all
+      documented in the README, with why they're services rather than entity
+      actions (no natural entity to attach one to) and, for the virtual-
+      reminder pair specifically, that edit always replaces title/class/due
+      together rather than merging.
   docs-conditions:
     status: exempt
     comment: No device conditions.
@@ -52,10 +56,14 @@ rules:
   # Silver
   action-exceptions:
     status: done
-    comment: ServiceValidationError for bad input (no/ambiguous config entry, id
-      not found isn't distinguishable from other 400s though — see
-      exception-translations below), HomeAssistantError for connection/auth
-      failures reaching ClassDash itself.
+    comment: ServiceValidationError for bad input — no/ambiguous config entry
+      always, and (for create/edit_virtual_reminder specifically, via
+      ClassDashValidationError) a real 400 from ClassDash itself, e.g. a
+      missing title or an unparseable due date. hide/unhide/mute/unmute
+      don't have this distinction yet — an unknown id there isn't
+      distinguishable from any other 400 (see exception-translations
+      below). HomeAssistantError for connection/auth failures reaching
+      ClassDash itself, everywhere.
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done

@@ -42,6 +42,16 @@ class ClassDashAuthError(ClassDashError):
     """Reached the server, but the bearer token was missing or wrong."""
 
 
+class ClassDashValidationError(ClassDashError):
+    """The server rejected the input itself — a 400 with either
+    {"ok": false, "why": "..."} (create/edit's own validation, e.g. a
+    missing title or an unparseable due date) or {"error": "..."} (the
+    handler's own request-shape check, e.g. a body with no "id" at all).
+    Worth its own error, distinct from ClassDashConnectionError: this
+    means the server understood the request just fine and said no, not
+    that it couldn't be reached."""
+
+
 async def fetch_server_certificate(host: str, port: int) -> bytes:
     """Open a bare TLS connection and return the peer certificate (DER).
 
@@ -160,6 +170,34 @@ class ClassDashClient:
         except aiohttp.ClientError as err:
             raise ClassDashConnectionError(str(err)) from err
 
+    async def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Like _post, but for the virtual-reminder create/edit endpoints,
+        which return a real body — {"ok": true, "entry": {...}} on
+        success. A 400 means the server understood the request and
+        rejected it (missing title, unparseable due date, or a
+        malformed body entirely) — surfaced as ClassDashValidationError
+        with whatever message the server gave, rather than folding it
+        into the generic "couldn't reach the server" error."""
+        try:
+            async with self._session.post(
+                f"{self._base}{path}",
+                headers={"Authorization": f"Bearer {self._token}"},
+                ssl=self._ssl_context,
+                json=body,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise ClassDashAuthError("missing or wrong bearer token")
+                if resp.status == 400:
+                    data = await resp.json()
+                    raise ClassDashValidationError(
+                        data.get("why") or data.get("error") or "invalid input"
+                    )
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientError as err:
+            raise ClassDashConnectionError(str(err)) from err
+
     async def async_get_status(self) -> dict[str, Any]:
         """A single quick round trip — used only to validate a token in the
         config flow. Ongoing data comes from `async_stream_updates` instead."""
@@ -195,6 +233,44 @@ class ClassDashClient:
 
     async def async_unmute(self, item_id: str) -> None:
         await self._post("/api/unmute", {"id": item_id})
+
+    async def async_get_virtual(self) -> list[dict[str, Any]]:
+        """The current virtual-reminder list — /api/virtual. Used to
+        refresh the coordinator right after a create/edit, since
+        virtual-assignments.json (unlike a real collection pass) isn't
+        one of the files /api/stream watches for changes — see
+        async_create_virtual_reminder/async_edit_virtual_reminder."""
+        return await self._get("/api/virtual")
+
+    async def async_create_virtual_reminder(
+        self, title: str, class_name: str | None = None, due: str | None = None
+    ) -> dict[str, Any]:
+        """Create a new virtual reminder — /api/virtual/create. `class_name`
+        is free text, not checked against any known class roster (a
+        reminder can be about a class ClassDash doesn't otherwise track
+        at all). `due`, if given, should be an ISO 8601 datetime string;
+        ClassDash accepts anything JS's `new Date()` parses, but this
+        integration always sends ISO. Returns the created entry."""
+        return await self._post_json(
+            "/api/virtual/create", {"title": title, "class": class_name, "due": due}
+        )
+
+    async def async_edit_virtual_reminder(
+        self,
+        item_id: str,
+        title: str,
+        class_name: str | None = None,
+        due: str | None = None,
+    ) -> dict[str, Any]:
+        """Edit an existing virtual reminder — /api/virtual/edit. title,
+        class_name, and due are always sent as a full replacement, not a
+        partial diff — ClassDash's own edit() overwrites all three every
+        time, including clearing class/due back to null if omitted, same
+        as the reminder edit form on ClassDash's own page does."""
+        return await self._post_json(
+            "/api/virtual/edit",
+            {"id": item_id, "title": title, "class": class_name, "due": due},
+        )
 
     async def async_get_update_status(self) -> dict[str, Any]:
         """Whatever ClassDash's own macOS-app update check last found —

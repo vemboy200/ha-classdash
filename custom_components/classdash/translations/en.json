@@ -123,6 +123,54 @@
           "description": "The id field from the assignment's own list attribute."
         }
       }
+    },
+    "create_virtual_reminder": {
+      "name": "Create virtual reminder",
+      "description": "Adds a new reminder — the same thing typing one into ClassDash's own Reminders section does. Shows up on the matching class's calendar once created. Returns the created reminder, including its id — the only way to get one back for a later Edit call, since a reminder isn't its own entity.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "title": {
+          "name": "Title",
+          "description": "What the reminder says."
+        },
+        "class": {
+          "name": "Class",
+          "description": "Which class this belongs to — free text, doesn't have to match a class ClassDash already tracks. Leave blank for a general reminder with no class."
+        },
+        "due": {
+          "name": "Due",
+          "description": "When it's due. Leave blank for a reminder with no real deadline."
+        }
+      }
+    },
+    "edit_virtual_reminder": {
+      "name": "Edit virtual reminder",
+      "description": "Changes an existing reminder's title, class, and due date. Title, class, and due are always replaced together — leaving class or due blank clears it, this isn't a partial update.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Reminder ID",
+          "description": "The id Create virtual reminder returned when this reminder was made."
+        },
+        "title": {
+          "name": "Title",
+          "description": "What the reminder says. Always sent — even if unchanged, resend the current value."
+        },
+        "class": {
+          "name": "Class",
+          "description": "Which class this belongs to — free text. Leave blank to clear it (no class), not to leave it unchanged."
+        },
+        "due": {
+          "name": "Due",
+          "description": "When it's due. Leave blank to clear it (no real deadline), not to leave it unchanged."
+        }
+      }
     }
   }
 }

@@ -1,4 +1,5 @@
-"""Tests for the hide/unhide/mute/unmute service actions."""
+"""Tests for the hide/unhide/mute/unmute and virtual-reminder service
+actions."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from custom_components.classdash.api import (
     ClassDashAuthError,
     ClassDashConnectionError,
+    ClassDashValidationError,
     StreamEvent,
 )
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
@@ -87,7 +89,14 @@ async def test_services_are_registered_after_setup(
     client.async_stream_updates = _open_stream
     await _setup(hass, entry, client)
 
-    for service in ("hide", "unhide", "mute", "unmute"):
+    for service in (
+        "hide",
+        "unhide",
+        "mute",
+        "unmute",
+        "create_virtual_reminder",
+        "edit_virtual_reminder",
+    ):
         assert hass.services.has_service(DOMAIN, service)
 
 
@@ -209,3 +218,199 @@ async def test_service_surfaces_auth_error(
 
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(DOMAIN, "mute", {"id": "x1"}, blocking=True)
+
+
+CREATED_ENTRY = {
+    "id": "v-abc123",
+    "title": "Bring signed permission slip",
+    "class": "Physics",
+    "due": "2026-09-10T14:30:00+00:00",
+    "createdAt": "2026-09-02T00:00:00.000Z",
+    "done": False,
+    "doneAt": None,
+    "hidden": False,
+}
+
+
+async def test_create_virtual_reminder_calls_client_and_refreshes(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock(
+        return_value={"ok": True, "entry": CREATED_ENTRY}
+    )
+    client.async_get_virtual = AsyncMock(return_value=[CREATED_ENTRY])
+    await _setup(hass, entry, client)
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "create_virtual_reminder",
+        {
+            "title": "Bring signed permission slip",
+            "class": "Physics",
+            "due": "2026-09-10T14:30:00+00:00",
+        },
+        blocking=True,
+        return_response=True,
+    )
+
+    client.async_create_virtual_reminder.assert_called_once_with(
+        title="Bring signed permission slip",
+        class_name="Physics",
+        due="2026-09-10T14:30:00+00:00",
+    )
+    # update-status.json's own gap all over again: a write to
+    # virtual-assignments.json doesn't trigger its own /api/stream
+    # broadcast either, so this has to refetch directly.
+    client.async_get_virtual.assert_called_once()
+    assert response == CREATED_ENTRY
+
+
+async def test_create_virtual_reminder_without_class_or_due(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock(
+        return_value={"ok": True, "entry": CREATED_ENTRY}
+    )
+    client.async_get_virtual = AsyncMock(return_value=[])
+    await _setup(hass, entry, client)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "create_virtual_reminder",
+        {"title": "General reminder"},
+        blocking=True,
+    )
+
+    client.async_create_virtual_reminder.assert_called_once_with(
+        title="General reminder", class_name=None, due=None
+    )
+
+
+async def test_edit_virtual_reminder_calls_client_and_refreshes(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    edited = {**CREATED_ENTRY, "title": "Bring signed AND initialed slip"}
+    client.async_edit_virtual_reminder = AsyncMock(
+        return_value={"ok": True, "entry": edited}
+    )
+    client.async_get_virtual = AsyncMock(return_value=[edited])
+    await _setup(hass, entry, client)
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "edit_virtual_reminder",
+        {
+            "id": "v-abc123",
+            "title": "Bring signed AND initialed slip",
+            "class": "Physics",
+            "due": "2026-09-10T14:30:00+00:00",
+        },
+        blocking=True,
+        return_response=True,
+    )
+
+    client.async_edit_virtual_reminder.assert_called_once_with(
+        item_id="v-abc123",
+        title="Bring signed AND initialed slip",
+        class_name="Physics",
+        due="2026-09-10T14:30:00+00:00",
+    )
+    client.async_get_virtual.assert_called_once()
+    assert response == edited
+
+
+async def test_create_virtual_reminder_surfaces_validation_error(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock(
+        side_effect=ClassDashValidationError("title is required")
+    )
+    await _setup(hass, entry, client)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "create_virtual_reminder",
+            {"title": "Whatever"},
+            blocking=True,
+        )
+    client.async_get_virtual.assert_not_called()
+
+
+async def test_edit_virtual_reminder_surfaces_connection_error(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_edit_virtual_reminder = AsyncMock(
+        side_effect=ClassDashConnectionError("refused")
+    )
+    await _setup(hass, entry, client)
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            "edit_virtual_reminder",
+            {"id": "v-abc123", "title": "Whatever"},
+            blocking=True,
+        )
+
+
+async def test_create_virtual_reminder_surfaces_auth_error(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock(
+        side_effect=ClassDashAuthError("bad token")
+    )
+    await _setup(hass, entry, client)
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            "create_virtual_reminder",
+            {"title": "Whatever"},
+            blocking=True,
+        )
+
+
+async def test_refresh_after_write_swallows_its_own_failure(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """The write itself already succeeded — a failed follow-up
+    /api/virtual refetch shouldn't turn that into a service-call error,
+    same reasoning as update.py's own best-effort refresh."""
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock(
+        return_value={"ok": True, "entry": CREATED_ENTRY}
+    )
+    client.async_get_virtual = AsyncMock(
+        side_effect=ClassDashConnectionError("dropped")
+    )
+    await _setup(hass, entry, client)
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "create_virtual_reminder",
+        {"title": "Bring signed permission slip"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response == CREATED_ENTRY
