@@ -13,12 +13,10 @@ from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
@@ -46,26 +44,20 @@ async def async_setup_entry(
 ) -> None:
     """Set up one calendar per class, added as new classes show up."""
     coordinator = entry.runtime_data
-    ent_reg = er.async_get(hass)
 
     @callback
     def _add_new_class_calendars() -> None:
-        """Checks the entity registry directly rather than a locally
-        tracked set — see sensor.py's own _add_new_class_sensors for why:
-        a class whose device got removed and later reappears needs to be
-        re-added, which an add-only set would miss."""
+        """Tracked via coordinator.known_class_calendars, a fresh,
+        process-local set — see that attribute's own docstring
+        (ClassDashCoordinator, coordinator.py) for why this isn't an
+        entity registry check: the registry persists a class's entities
+        across a restart even though the actual Entity objects don't."""
         if coordinator.data is None:
             return
-        new = {
-            name
-            for name in class_names(coordinator.data)
-            if ent_reg.async_get_entity_id(
-                "calendar", DOMAIN, f"{class_unique_id(entry, name)}_calendar"
-            )
-            is None
-        }
+        new = class_names(coordinator.data) - coordinator.known_class_calendars
         if not new:
             return
+        coordinator.known_class_calendars |= new
         async_add_entities(
             ClassDashClassCalendar(coordinator, entry, name) for name in sorted(new)
         )

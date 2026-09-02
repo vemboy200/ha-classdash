@@ -168,6 +168,20 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         self.client = client
         self._listen_task: asyncio.Task[None] | None = None
         self._first_update: asyncio.Future[ClassDashData] = hass.loop.create_future()
+        # Which classes sensor.py/calendar.py have each already added
+        # entities for, *this process*. Deliberately not derived from the
+        # entity/device registry — those persist across a restart on
+        # disk, but the actual Entity objects don't; checking the
+        # registry for "already exists" would wrongly skip re-adding
+        # every class on every restart, leaving them stuck showing
+        # unavailable (a real bug this replaced — a fresh coordinator
+        # means these start empty every time, so a fresh async_setup_entry
+        # always re-adds everything it currently knows about). Two
+        # separate sets, not one shared: sensor.py and calendar.py add
+        # different entities for the same class and each needs its own
+        # "have I added this one yet" answer, not each other's.
+        self.known_class_sensors: set[str] = set()
+        self.known_class_calendars: set[str] = set()
 
     async def _async_update_data(self) -> ClassDashData:
         """Called exactly once, by async_config_entry_first_refresh.

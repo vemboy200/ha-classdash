@@ -41,17 +41,21 @@ def class_device_info(entry: ClassDashConfigEntry, class_name: str) -> DeviceInf
     )
 
 
-def stale_class_device_ids(
+def stale_class_devices(
     hass: HomeAssistant, entry: ClassDashConfigEntry, current_names: set[str]
-) -> list[str]:
-    """Device registry ids of class sub-devices that no longer correspond
-    to any name in `current_names` — a class that's become orphaned, gone
-    stale, or been excluded in ClassDash itself.
+) -> list[tuple[str, str]]:
+    """(device id, class name) pairs for class sub-devices that no longer
+    correspond to any name in `current_names` — a class that's become
+    orphaned, gone stale, or been excluded in ClassDash itself.
 
     Identifies a "class sub-device" by `via_device_id` pointing at the
     main device, rather than trying to parse a name back out of its
     slugified identifier (not reliably invertible) — comparing identifier
-    sets directly instead.
+    sets directly instead. The class name is `device.name` itself, not
+    reconstructed from the identifier either — class_device_info sets it
+    to the plain class name directly, so it's already right there. The
+    caller needs the name (not just the device id) to also drop it from
+    ClassDashCoordinator.known_class_sensors/known_class_calendars.
     """
     device_reg = dr.async_get(hass)
     main_device = device_reg.async_get_device(identifiers={(DOMAIN, entry.unique_id)})
@@ -61,7 +65,7 @@ def stale_class_device_ids(
         (DOMAIN, class_unique_id(entry, name)) for name in current_names
     }
     return [
-        device.id
+        (device.id, device.name)
         for device in dr.async_entries_for_config_entry(device_reg, entry.entry_id)
         if device.via_device_id == main_device.id
         and not (device.identifiers & current_identifiers)

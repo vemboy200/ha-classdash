@@ -13,7 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
-from .devices import stale_class_device_ids
+from .devices import stale_class_devices
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -69,8 +69,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
         if coordinator.data is None:
             return
         current = class_names(coordinator.data)
-        for device_id in stale_class_device_ids(hass, entry, current):
+        for device_id, class_name in stale_class_devices(hass, entry, current):
             device_reg.async_remove_device(device_id)
+            # So sensor.py/calendar.py know to re-add this class's
+            # entities if it reappears later, instead of wrongly
+            # thinking they're still there — see
+            # ClassDashCoordinator.known_class_sensors' own docstring.
+            coordinator.known_class_sensors.discard(class_name)
+            coordinator.known_class_calendars.discard(class_name)
 
     _remove_stale_class_devices()
     entry.async_on_unload(coordinator.async_add_listener(_remove_stale_class_devices))

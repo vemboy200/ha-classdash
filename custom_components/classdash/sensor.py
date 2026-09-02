@@ -12,12 +12,11 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, MAX_LIST_ATTRIBUTES
+from .const import MAX_LIST_ATTRIBUTES
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
@@ -198,28 +197,24 @@ async def async_setup_entry(
         for description in SENSOR_DESCRIPTIONS
     )
 
-    ent_reg = er.async_get(hass)
-
     @callback
     def _add_new_class_sensors() -> None:
         """Give any class that doesn't already have sensors its three
-        count sensors. Checks the entity registry directly rather than a
-        locally-tracked "already added" set — a class whose device was
-        removed by __init__.py's stale-device cleanup and then reappears
-        needs to be re-added, and a set that only ever grows would
-        wrongly think it's still there."""
+        count sensors. Tracked via coordinator.known_class_sensors — a
+        fresh, process-local set, not the entity registry — see that
+        attribute's own docstring for why: the registry persists a
+        class's entities across a restart even though the actual Entity
+        objects don't, and checking it here would wrongly skip re-adding
+        every class on every restart, leaving them all stuck
+        unavailable. __init__.py's stale-device cleanup discards a
+        removed class's name from this same set, so a class that
+        reappears later still gets re-added correctly."""
         if coordinator.data is None:
             return
-        new = {
-            name
-            for name in class_names(coordinator.data)
-            if ent_reg.async_get_entity_id(
-                "sensor", DOMAIN, f"{class_unique_id(entry, name)}_due_soon"
-            )
-            is None
-        }
+        new = class_names(coordinator.data) - coordinator.known_class_sensors
         if not new:
             return
+        coordinator.known_class_sensors |= new
         async_add_entities(
             ClassDashClassSensor(coordinator, entry, name, key)
             for name in sorted(new)
