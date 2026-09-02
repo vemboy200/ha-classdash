@@ -106,13 +106,16 @@ async def test_check_status_sensors_reflect_platform_health(
     assert classroom.state == "ok"
     assert classroom.attributes["at"] == "2026-09-01T00:00:00.000Z"
     assert classroom.attributes["detail"] is None
+    assert classroom.attributes["icon"] == "mdi:cloud-check-variant"
 
     canvas = _state_for("check_status_canvas")
     assert canvas.state == "problem"
     assert canvas.attributes["detail"] == "timed out"
+    assert canvas.attributes["icon"] == "mdi:cloud-alert"
 
     edpuzzle = _state_for("check_status_edpuzzle")
     assert edpuzzle.state == "unknown"
+    assert edpuzzle.attributes["icon"] == "mdi:cloud-question"
 
 
 async def test_done_sensor_main_and_per_class(
@@ -196,7 +199,7 @@ async def test_virtual_reminder_appears_on_class_calendar(
     assert hass.states.get(calendar_id).attributes["message"] == "Study for the final"
 
 
-async def test_done_and_hidden_virtual_reminders_excluded_from_calendar(
+async def test_done_virtual_reminders_tagged_hidden_ones_excluded(
     hass: HomeAssistant, sample_certificate
 ) -> None:
     bundle = {
@@ -245,7 +248,24 @@ async def test_done_and_hidden_virtual_reminders_excluded_from_calendar(
     calendar_id = ent_reg.async_get_entity_id(
         "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
     )
-    assert hass.states.get(calendar_id).attributes["message"] == "Still relevant"
+    # "Already done" is now the soonest not-yet-ended event (2026-09-10,
+    # before "Still relevant"'s 2026-09-12) — done items show up on the
+    # calendar now, tagged, rather than being excluded outright.
+    assert hass.states.get(calendar_id).attributes["message"] == "Already done (done)"
+
+    response = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": calendar_id,
+            "start_date_time": "2026-01-01T00:00:00+00:00",
+            "end_date_time": "2027-01-01T00:00:00+00:00",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    summaries = {e["summary"] for e in response[calendar_id]["events"]}
+    assert summaries == {"Already done (done)", "Still relevant"}
 
 
 async def test_virtual_reminder_with_no_class_gets_no_calendar(

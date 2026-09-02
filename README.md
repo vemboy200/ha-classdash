@@ -112,7 +112,7 @@ due or announced for it, same as before.
 | Entity | What it is |
 |---|---|
 | Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device |
-| Assignments (calendar) | That class's due-soon + ahead + overdue assignments, plus any virtual reminder assigned to it, as calendar events — each due date/time becomes a 30-minute event; overdue ones stay on the calendar too, they just don't show as the "next" event. A reminder marked done drops off the calendar the same way a real done assignment structurally never appears on it |
+| Assignments (calendar) | That class's due-soon + ahead + overdue + done assignments, plus any virtual reminder assigned to it, as calendar events — each due date/time becomes a 30-minute event. An overdue item's title gets an "(overdue)" tag, and a done one gets "(done)" — e.g. "Lab report (overdue)" — since due-soon/ahead don't need one (the due date alone already says when those are), but overdue is worth calling out plainly, and done would otherwise look identical to an undone item sharing the same due date. A virtual reminder gets the same tags: "(done)" if marked done, "(overdue)" if its due date has passed. Overdue/done items don't show up as the calendar's "next" event, they're just present when the range covers them |
 
 A class's entities aren't tied to whether anything's currently due —
 zero due items just means the sensors read 0 and the calendar shows no

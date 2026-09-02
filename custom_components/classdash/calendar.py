@@ -74,14 +74,15 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_class_calendars))
 
 
-def _assignment_to_event(item: dict[str, Any]) -> CalendarEvent | None:
+def _assignment_to_event(item: dict[str, Any], tag: str | None = None) -> CalendarEvent | None:
     due = dt_util.parse_datetime(item["due"]) if item.get("due") else None
     if due is None:
         return None
+    title = item.get("title") or "Untitled assignment"
     return CalendarEvent(
         start=due,
         end=due + EVENT_DURATION,
-        summary=item.get("title") or "Untitled assignment",
+        summary=f"{title} ({tag})" if tag else title,
         description=item.get("link") or "",
         uid=item.get("id"),
     )
@@ -106,21 +107,53 @@ class ClassDashClassCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEn
         self._attr_unique_id = f"{class_unique_id(entry, class_name)}_calendar"
         self._attr_device_info = class_device_info(entry, class_name)
 
-    def _events(self) -> list[CalendarEvent]:
-        data = self.coordinator.data
-        # /api/virtual mixes every state (overdue/upcoming/undated/done)
-        # into one list, unlike real assignments where each state is its
-        # own separate bucket — done ones are excluded here explicitly so
-        # a completed reminder doesn't linger on the calendar the same
-        # way a real done assignment structurally can't (it's not in
-        # due_soon/ahead/overdue to begin with).
-        virtual = [x for x in data.virtual if not is_done(x)]
-        items = [
-            x
-            for x in (*data.due_soon, *data.ahead, *data.overdue, *virtual)
-            if x.get("class") == self._class_name and not is_hidden(x)
+    def _for_class(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            x for x in items if x.get("class") == self._class_name and not is_hidden(x)
         ]
-        events = [e for x in items if (e := _assignment_to_event(x)) is not None]
+
+    def _events(self) -> list[CalendarEvent]:
+        """Due-soon/ahead/overdue/done, plus any virtual reminder assigned
+        to this class. Done and overdue get a "(done)"/"(overdue)" tag on
+        the title — due-soon/ahead don't need one, the due date alone
+        already says when those are, but an overdue item is worth calling
+        out plainly rather than making someone notice it's in the past on
+        their own, and a done one would otherwise look identical to an
+        undone one sharing the same due date.
+
+        /api/virtual mixes every state (overdue/upcoming/undated/done)
+        into one list, unlike real assignments where each state is
+        already its own separate bucket — tagged here the same way, by
+        checking is_done()/the due date directly, for the same reason a
+        real assignment's state is worth tagging.
+        """
+        data = self.coordinator.data
+        now = dt_util.now()
+        events: list[CalendarEvent] = []
+
+        for x in (*self._for_class(data.due_soon), *self._for_class(data.ahead)):
+            if (e := _assignment_to_event(x)) is not None:
+                events.append(e)
+
+        for x in self._for_class(data.overdue):
+            if (e := _assignment_to_event(x, tag="overdue")) is not None:
+                events.append(e)
+
+        for x in self._for_class(data.done):
+            if (e := _assignment_to_event(x, tag="done")) is not None:
+                events.append(e)
+
+        for x in self._for_class(data.virtual):
+            due = dt_util.parse_datetime(x["due"]) if x.get("due") else None
+            if is_done(x):
+                tag = "done"
+            elif due is not None and due < now:
+                tag = "overdue"
+            else:
+                tag = None
+            if (e := _assignment_to_event(x, tag=tag)) is not None:
+                events.append(e)
+
         events.sort(key=lambda e: e.start_datetime_local)
         return events
 

@@ -333,7 +333,9 @@ async def test_hidden_items_excluded_from_per_class_count_and_calendar(
     calendar_id = ent_reg.async_get_entity_id(
         "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
     )
-    assert hass.states.get(calendar_id).attributes["message"] == "Visible one"
+    assert (
+        hass.states.get(calendar_id).attributes["message"] == "Visible one (overdue)"
+    )
 
 
 async def test_class_device_removed_when_class_disappears(

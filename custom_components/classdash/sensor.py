@@ -76,6 +76,7 @@ class ClassDashSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[ClassDashData], Any]
     attrs_fn: Callable[[ClassDashData], dict[str, Any]] | None = None
+    icon_fn: Callable[[ClassDashData], str] | None = None
 
 
 SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
@@ -146,20 +147,18 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         ClassDashSensorDescription(
             key=f"check_status_{platform}",
             translation_key=f"check_status_{platform}",
-            icon=icon,
             device_class=SensorDeviceClass.ENUM,
             options=["ok", "problem", "unknown"],
             value_fn=lambda d, platform=platform: d.check_status[platform]["status"],
+            icon_fn=lambda d, platform=platform: CHECK_STATUS_ICONS[
+                d.check_status[platform]["status"]
+            ],
             attrs_fn=lambda d, platform=platform: {
                 "at": d.check_status[platform]["at"],
                 "detail": d.check_status[platform]["detail"],
             },
         )
-        for platform, icon in (
-            ("classroom", "mdi:google-classroom"),
-            ("canvas", "mdi:school"),
-            ("edpuzzle", "mdi:movie-play"),
-        )
+        for platform in ("classroom", "canvas", "edpuzzle")
     ),
 )
 
@@ -174,6 +173,16 @@ CLASS_SENSOR_ICONS = {
     "overdue": "mdi:book-alert",
     "ahead": "mdi:book-clock-outline",
     "done": "mdi:book-check",
+}
+
+# Same icon per state across all three check-status sensors, rather than
+# one fixed icon per platform — the state (pipeline healthy or not) is
+# what's worth seeing at a glance, not which platform it is (that's
+# already the entity's own name).
+CHECK_STATUS_ICONS = {
+    "ok": "mdi:cloud-check-variant",
+    "problem": "mdi:cloud-alert",
+    "unknown": "mdi:cloud-question",
 }
 
 
@@ -241,6 +250,12 @@ class ClassDashSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
     @property
     def native_value(self) -> Any:
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def icon(self) -> str | None:
+        if self.entity_description.icon_fn is None:
+            return self.entity_description.icon
+        return self.entity_description.icon_fn(self.coordinator.data)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
