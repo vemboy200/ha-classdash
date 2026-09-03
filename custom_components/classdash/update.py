@@ -15,6 +15,7 @@ otherwise look like it finishes the job.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import re
 from typing import Any
@@ -44,6 +45,14 @@ PARALLEL_UPDATES = 0
 # treating update_status["url"] as trusted enough to build a request to
 # whatever host it names, sight unseen, isn't a chance worth taking.
 _RELEASE_URL_PATH_RE = re.compile(r"^/([^/]+)/([^/]+)/releases/tag/(.+)$")
+
+# How long async_install actually waits and polls before giving up on
+# watching the download it started — see async_install's own docstring
+# for why it polls at all instead of returning right away. 3s * 200 =
+# 10 minutes, generous for a release .dmg over a normal home
+# connection without polling so tightly it's spamming the API.
+_INSTALL_POLL_INTERVAL = 3
+_INSTALL_POLL_ATTEMPTS = 200
 
 
 def _parse_github_release_url(url: str) -> tuple[str, str, str] | None:
@@ -113,6 +122,20 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
+        """Starts the download, then waits out the whole thing.
+
+        This has to actually wait, not just kick the download off and
+        return — ClassDash doesn't push update-status.json changes over
+        /api/stream (see ClassDashData.update_status's own docstring),
+        so nothing would ever tell this entity the download finished.
+        Returning early left in_progress stuck true until some unrelated
+        event happened to refresh the coordinator, which in practice
+        meant reloading the integration by hand — the actual bug this
+        polling loop exists to fix. Each poll's refresh also pushes a
+        real state update along the way (via
+        coordinator.async_set_updated_data), so the UI reflects the
+        download settling, not just its start and end.
+        """
         try:
             await self.coordinator.client.async_download_update()
         except ClassDashAuthError as err:
@@ -121,7 +144,32 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
             raise HomeAssistantError(
                 f"Could not reach ClassDash's home API: {err}"
             ) from err
-        await self._async_refresh_status()
+
+        target_version = self.latest_version
+        for _ in range(_INSTALL_POLL_ATTEMPTS):
+            await asyncio.sleep(_INSTALL_POLL_INTERVAL)
+            if not await self._async_refresh_status():
+                continue
+            if not self._status.get("downloading", False):
+                break
+        else:
+            # Ran out of polling attempts without downloading ever
+            # settling back to false — leave it showing "in progress"
+            # rather than raising here, since for all this knows the
+            # download itself is still healthily running (a slow
+            # connection, a large release); the poll budget running out
+            # says nothing concrete about whether it succeeded or failed.
+            return
+
+        if (
+            self._status.get("readyVersion") != target_version
+            or not self._status.get("readyToInstall")
+        ):
+            raise HomeAssistantError(
+                "ClassDash stopped downloading the update without it "
+                "becoming ready to install — check ClassDash's own logs "
+                "for what went wrong"
+            )
 
     async def async_release_notes(self) -> str | None:
         """The actual GitHub release body (markdown) for latest_version.
@@ -153,18 +201,21 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
             return None
         return data.get("body")
 
-    async def _async_refresh_status(self) -> None:
+    async def _async_refresh_status(self) -> bool:
         """update-status.json isn't watched by /api/stream (see
         ClassDashData.update_status's own docstring) — a write to it alone
         never triggers a push. Fetch it directly so this entity doesn't
         sit showing stale downloading/ready state until some unrelated
         collection pass happens to broadcast next. Best-effort: the
         download itself already started regardless of whether this
-        follow-up fetch succeeds."""
+        follow-up fetch succeeds. Returns whether it actually got a
+        fresh status, so async_install's poll loop knows a failed
+        request isn't the same thing as "downloading turned false"."""
         try:
             status = await self.coordinator.client.async_get_update_status()
         except (ClassDashAuthError, ClassDashConnectionError):
-            return
+            return False
         self.coordinator.async_set_updated_data(
             dataclasses.replace(self.coordinator.data, update_status=status)
         )
+        return True

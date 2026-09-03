@@ -139,13 +139,16 @@ async def test_up_to_date_is_off(hass: HomeAssistant, sample_certificate) -> Non
     assert state.state == "off"
 
 
-async def test_install_starts_download_and_refreshes_status(
+async def test_install_polls_until_download_finishes(
     hass: HomeAssistant, sample_certificate
 ) -> None:
     """update.install has to actually start the download (the only write
-    the real API offers) and then re-fetch /api/update-status itself,
-    since a write to update-status.json doesn't trigger a stream push the
-    way a real collection pass does."""
+    the real API offers) and then keep polling /api/update-status until
+    downloading turns false, not just refresh once — a write to
+    update-status.json doesn't trigger a stream push the way a real
+    collection pass does, so a single refresh would leave in_progress
+    stuck true until something unrelated happened to refresh the
+    coordinator (the actual bug this polling loop was added to fix)."""
     initial = {
         "currentVersion": "0.3.0",
         "latestVersion": "0.4.0",
@@ -153,14 +156,24 @@ async def test_install_starts_download_and_refreshes_status(
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
     }
-    refreshed = {**initial, "downloading": True}
+    still_downloading = {**initial, "downloading": True}
+    finished = {
+        **initial,
+        "downloading": False,
+        "readyToInstall": True,
+        "readyVersion": "0.4.0",
+        "downloadedPath": "/tmp/update-download.dmg",
+    }
 
-    with patch(
-        "custom_components.classdash.ClassDashClient", autospec=True
-    ) as mock_client_cls:
+    with (
+        patch(
+            "custom_components.classdash.ClassDashClient", autospec=True
+        ) as mock_client_cls,
+        patch("custom_components.classdash.update.asyncio.sleep", new=AsyncMock()),
+    ):
         mock_client_cls.return_value.async_download_update = AsyncMock()
         mock_client_cls.return_value.async_get_update_status = AsyncMock(
-            return_value=refreshed
+            side_effect=[still_downloading, still_downloading, finished]
         )
         await _setup_entry(hass, sample_certificate, mock_client_cls, _bundle(initial))
         entity_id = _entity_id(hass)
@@ -170,9 +183,83 @@ async def test_install_starts_download_and_refreshes_status(
         )
 
         mock_client_cls.return_value.async_download_update.assert_called_once()
-        mock_client_cls.return_value.async_get_update_status.assert_called_once()
+        assert mock_client_cls.return_value.async_get_update_status.call_count == 3
+        state = hass.states.get(entity_id)
+        assert state.attributes["in_progress"] is False
+        assert state.attributes["ready_to_install"] is True
+
+
+async def test_install_gives_up_after_poll_budget_without_raising(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """Running out of polling attempts while still downloading isn't
+    treated as a failure — a slow connection or a big release isn't an
+    error, just something this stopped watching. in_progress stays true,
+    reflecting the last real status seen."""
+    status = {
+        "currentVersion": "0.3.0",
+        "latestVersion": "0.4.0",
+        "url": None,
+        "checkedAt": "2026-09-01T00:00:00.000Z",
+        "updateAvailable": True,
+    }
+    still_downloading = {**status, "downloading": True}
+
+    with (
+        patch(
+            "custom_components.classdash.ClassDashClient", autospec=True
+        ) as mock_client_cls,
+        patch("custom_components.classdash.update.asyncio.sleep", new=AsyncMock()),
+        patch("custom_components.classdash.update._INSTALL_POLL_ATTEMPTS", 3),
+    ):
+        mock_client_cls.return_value.async_download_update = AsyncMock()
+        mock_client_cls.return_value.async_get_update_status = AsyncMock(
+            return_value=still_downloading
+        )
+        await _setup_entry(hass, sample_certificate, mock_client_cls, _bundle(status))
+        entity_id = _entity_id(hass)
+
+        await hass.services.async_call(
+            "update", "install", {"entity_id": entity_id}, blocking=True
+        )
+
+        assert mock_client_cls.return_value.async_get_update_status.call_count == 3
         state = hass.states.get(entity_id)
         assert state.attributes["in_progress"] is True
+
+
+async def test_install_raises_when_download_stops_without_becoming_ready(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """downloading turning false doesn't always mean success — a failed
+    fetch also leaves it false, just without readyToInstall ever
+    becoming true for the version that was actually requested."""
+    status = {
+        "currentVersion": "0.3.0",
+        "latestVersion": "0.4.0",
+        "url": None,
+        "checkedAt": "2026-09-01T00:00:00.000Z",
+        "updateAvailable": True,
+    }
+    failed = {**status, "downloading": False, "readyToInstall": False}
+
+    with (
+        patch(
+            "custom_components.classdash.ClassDashClient", autospec=True
+        ) as mock_client_cls,
+        patch("custom_components.classdash.update.asyncio.sleep", new=AsyncMock()),
+    ):
+        mock_client_cls.return_value.async_download_update = AsyncMock()
+        mock_client_cls.return_value.async_get_update_status = AsyncMock(
+            return_value=failed
+        )
+        await _setup_entry(hass, sample_certificate, mock_client_cls, _bundle(status))
+        entity_id = _entity_id(hass)
+
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call(
+                "update", "install", {"entity_id": entity_id}, blocking=True
+            )
 
 
 async def test_install_surfaces_connection_error(
@@ -228,9 +315,10 @@ async def test_install_surfaces_auth_error(
 async def test_install_refresh_failure_does_not_raise(
     hass: HomeAssistant, sample_certificate
 ) -> None:
-    """The download itself already started — a failed follow-up refetch
-    shouldn't turn that into a service-call error, the entity just stays
-    on whatever it last had until the next real push."""
+    """The download itself already started — a refetch that keeps
+    failing every single poll shouldn't turn into a service-call error,
+    the entity just stays on whatever it last had until the next real
+    push (or a later poll that actually succeeds)."""
     status = {
         "currentVersion": "0.3.0",
         "latestVersion": "0.4.0",
@@ -238,9 +326,13 @@ async def test_install_refresh_failure_does_not_raise(
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
     }
-    with patch(
-        "custom_components.classdash.ClassDashClient", autospec=True
-    ) as mock_client_cls:
+    with (
+        patch(
+            "custom_components.classdash.ClassDashClient", autospec=True
+        ) as mock_client_cls,
+        patch("custom_components.classdash.update.asyncio.sleep", new=AsyncMock()),
+        patch("custom_components.classdash.update._INSTALL_POLL_ATTEMPTS", 3),
+    ):
         mock_client_cls.return_value.async_download_update = AsyncMock()
         mock_client_cls.return_value.async_get_update_status = AsyncMock(
             side_effect=ClassDashConnectionError("dropped")
@@ -252,6 +344,7 @@ async def test_install_refresh_failure_does_not_raise(
             "update", "install", {"entity_id": entity_id}, blocking=True
         )
         mock_client_cls.return_value.async_download_update.assert_called_once()
+        assert mock_client_cls.return_value.async_get_update_status.call_count == 3
 
 
 def _get_entity(hass: HomeAssistant, entity_id: str):
