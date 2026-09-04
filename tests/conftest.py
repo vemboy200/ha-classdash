@@ -32,16 +32,21 @@ def unknown_check_status() -> dict[str, dict[str, None | str]]:
     return {"classroom": dict(unknown), "canvas": dict(unknown), "edpuzzle": dict(unknown)}
 
 
-def default_update_status() -> dict[str, None | bool]:
+def default_update_status() -> dict[str, None | bool | str]:
     """/api/update-status' own shape before any check has ever run —
     matches the fallback object 17-api.js's handler returns for
-    readUpdateStatus() is None."""
+    readUpdateStatus() is None. status/downloadedVersion are computed
+    on every read (computeStatus() in 26-update-check.js), not stored —
+    "unknown"/None is what that computation returns for this exact
+    fallback shape (no checkedAt at all)."""
     return {
         "currentVersion": None,
         "latestVersion": None,
         "url": None,
         "checkedAt": None,
         "updateAvailable": False,
+        "status": "unknown",
+        "downloadedVersion": None,
     }
 
 

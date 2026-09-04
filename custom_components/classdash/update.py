@@ -113,11 +113,23 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
 
     @property
     def in_progress(self) -> bool | None:
-        return self._status.get("downloading", False)
+        return self._status.get("status") == "downloading"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"ready_to_install": self._status.get("readyToInstall", False)}
+        """status is ClassDash's own single-word summary (unknown/error/
+        downloading/ready/available/up_to_date, computed fresh on every
+        read — see 26-update-check.js's computeStatus()) — surfaced
+        as-is since it's already the authoritative answer to "what's it
+        doing right now", not something worth re-deriving here.
+        downloaded_version is the version actually sitting downloaded,
+        distinct from installed_version (running) and latest_version
+        (GitHub's newest) — null until something's been downloaded."""
+        return {
+            "status": self._status.get("status"),
+            "downloaded_version": self._status.get("downloadedVersion"),
+            "ready_to_install": self._status.get("readyToInstall", False),
+        }
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
@@ -145,30 +157,25 @@ class ClassDashAppUpdate(CoordinatorEntity[ClassDashCoordinator], UpdateEntity):
                 f"Could not reach ClassDash's home API: {err}"
             ) from err
 
-        target_version = self.latest_version
         for _ in range(_INSTALL_POLL_ATTEMPTS):
             await asyncio.sleep(_INSTALL_POLL_INTERVAL)
             if not await self._async_refresh_status():
                 continue
-            if not self._status.get("downloading", False):
+            if not self.in_progress:
                 break
         else:
             # Ran out of polling attempts without downloading ever
-            # settling back to false — leave it showing "in progress"
-            # rather than raising here, since for all this knows the
-            # download itself is still healthily running (a slow
-            # connection, a large release); the poll budget running out
-            # says nothing concrete about whether it succeeded or failed.
+            # settling — leave it showing "in progress" rather than
+            # raising here, since for all this knows the download itself
+            # is still healthily running (a slow connection, a large
+            # release); the poll budget running out says nothing
+            # concrete about whether it succeeded or failed.
             return
 
-        if (
-            self._status.get("readyVersion") != target_version
-            or not self._status.get("readyToInstall")
-        ):
+        if self._status.get("status") == "error":
             raise HomeAssistantError(
-                "ClassDash stopped downloading the update without it "
-                "becoming ready to install — check ClassDash's own logs "
-                "for what went wrong"
+                "ClassDash couldn't download the update: "
+                f"{self._status.get('error') or 'unknown error'}"
             )
 
     async def async_release_notes(self) -> str | None:

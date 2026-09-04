@@ -91,6 +91,8 @@ async def test_reflects_available_update(
         "url": "https://github.com/vemboy200/ClassDash/releases/tag/v0.4.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
+        "status": "available",
+        "downloadedVersion": None,
     }
     with patch(
         "custom_components.classdash.ClassDashClient", autospec=True
@@ -105,6 +107,38 @@ async def test_reflects_available_update(
         state.attributes["release_url"]
         == "https://github.com/vemboy200/ClassDash/releases/tag/v0.4.0"
     )
+    assert state.attributes["in_progress"] is False
+    assert state.attributes["status"] == "available"
+    assert state.attributes["downloaded_version"] is None
+
+
+async def test_reflects_downloaded_but_not_installed(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """downloaded_version is distinct from both installed_version (what's
+    actually running) and latest_version (what GitHub has) — a version
+    can be sitting downloaded without being either of those, e.g. right
+    after a download finishes but before the native install prompt is
+    confirmed."""
+    status = {
+        "currentVersion": "0.3.0",
+        "latestVersion": "0.4.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v0.4.0",
+        "checkedAt": "2026-09-01T00:00:00.000Z",
+        "updateAvailable": True,
+        "status": "ready",
+        "downloadedVersion": "0.4.0",
+        "readyToInstall": True,
+    }
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        await _setup_entry(hass, sample_certificate, mock_client_cls, _bundle(status))
+        state = hass.states.get(_entity_id(hass))
+
+    assert state.attributes["status"] == "ready"
+    assert state.attributes["downloaded_version"] == "0.4.0"
+    assert state.attributes["ready_to_install"] is True
     assert state.attributes["in_progress"] is False
 
 
@@ -129,6 +163,8 @@ async def test_up_to_date_is_off(hass: HomeAssistant, sample_certificate) -> Non
         "url": None,
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": False,
+        "status": "up_to_date",
+        "downloadedVersion": None,
     }
     with patch(
         "custom_components.classdash.ClassDashClient", autospec=True
@@ -155,13 +191,17 @@ async def test_install_polls_until_download_finishes(
         "url": "https://example.com/release",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
+        "status": "available",
+        "downloadedVersion": None,
     }
-    still_downloading = {**initial, "downloading": True}
+    still_downloading = {**initial, "status": "downloading", "downloading": True}
     finished = {
         **initial,
+        "status": "ready",
         "downloading": False,
         "readyToInstall": True,
         "readyVersion": "0.4.0",
+        "downloadedVersion": "0.4.0",
         "downloadedPath": "/tmp/update-download.dmg",
     }
 
@@ -187,6 +227,8 @@ async def test_install_polls_until_download_finishes(
         state = hass.states.get(entity_id)
         assert state.attributes["in_progress"] is False
         assert state.attributes["ready_to_install"] is True
+        assert state.attributes["status"] == "ready"
+        assert state.attributes["downloaded_version"] == "0.4.0"
 
 
 async def test_install_gives_up_after_poll_budget_without_raising(
@@ -202,8 +244,10 @@ async def test_install_gives_up_after_poll_budget_without_raising(
         "url": None,
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
+        "status": "available",
+        "downloadedVersion": None,
     }
-    still_downloading = {**status, "downloading": True}
+    still_downloading = {**status, "status": "downloading", "downloading": True}
 
     with (
         patch(
@@ -232,16 +276,26 @@ async def test_install_raises_when_download_stops_without_becoming_ready(
     hass: HomeAssistant, sample_certificate
 ) -> None:
     """downloading turning false doesn't always mean success — a failed
-    fetch also leaves it false, just without readyToInstall ever
-    becoming true for the version that was actually requested."""
+    fetch leaves it false too, with status reading "error" and a real
+    message in `error` (ClassDash's own computeStatus()/error field) —
+    that's the signal this raises on, surfacing the actual reason rather
+    than a generic "something went wrong"."""
     status = {
         "currentVersion": "0.3.0",
         "latestVersion": "0.4.0",
         "url": None,
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
+        "status": "available",
+        "downloadedVersion": None,
     }
-    failed = {**status, "downloading": False, "readyToInstall": False}
+    failed = {
+        **status,
+        "status": "error",
+        "downloading": False,
+        "readyToInstall": False,
+        "error": "download responded 404",
+    }
 
     with (
         patch(
@@ -256,7 +310,7 @@ async def test_install_raises_when_download_stops_without_becoming_ready(
         await _setup_entry(hass, sample_certificate, mock_client_cls, _bundle(status))
         entity_id = _entity_id(hass)
 
-        with pytest.raises(HomeAssistantError):
+        with pytest.raises(HomeAssistantError, match="download responded 404"):
             await hass.services.async_call(
                 "update", "install", {"entity_id": entity_id}, blocking=True
             )
