@@ -14,12 +14,14 @@ import asyncio
 import dataclasses
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import ClassDashAuthError, ClassDashClient, ClassDashConnectionError
 from .const import (
@@ -130,6 +132,43 @@ def is_done(item: dict[str, Any]) -> bool:
     list, unlike real assignments where "done" is already its own
     separate bucket that due/ahead/overdue structurally can't contain."""
     return "done" in item.get("tags", [])
+
+
+# Mirrors 24-virtual-assignments.js's own "due within 7 days" cutoff for
+# real assignments (`dueAt - now <= 7 * 864e5`, ClassDash's own
+# due-soon/ahead split). /api/virtual doesn't expose which bucket a
+# reminder landed in server-side the way real assignments do (each real
+# bucket is its own REST endpoint) — it hands back one flat list with
+# just a due date and done/hidden tags — so sensor.py has to re-derive
+# due-soon/ahead/overdue/done locally from that. If ClassDash's own
+# cutoff ever changes, this needs updating to match; there's no way for
+# this integration to read it live.
+VIRTUAL_DUE_SOON_WINDOW = timedelta(days=7)
+
+
+def virtual_bucket(item: dict[str, Any], now: datetime) -> str | None:
+    """Which of "due_soon"/"ahead"/"overdue"/"done" a virtual reminder
+    falls into, for the sensors that count real assignments the same
+    way — matches ClassDashData's own field names so callers can use it
+    directly with getattr(). None for a hidden item, or an undated one
+    that isn't done either: a real assignment never ends up in
+    due_soon/ahead/overdue without a due date (see 17-api.js's
+    treatUndatedAsUrgent handling — an undated one is either resolved to
+    "tomorrow" before it ever reaches these buckets, or excluded
+    entirely), so a virtual reminder shouldn't either. Being done doesn't
+    need a due date at all, unlike the other three."""
+    if is_hidden(item):
+        return None
+    if is_done(item):
+        return "done"
+    due = dt_util.parse_datetime(item["due"]) if item.get("due") else None
+    if due is None:
+        return None
+    if due < now:
+        return "overdue"
+    if due - now <= VIRTUAL_DUE_SOON_WINDOW:
+        return "due_soon"
+    return "ahead"
 
 
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:

@@ -27,6 +27,12 @@ def main_device_info(entry: ClassDashConfigEntry) -> DeviceInfo:
     )
 
 
+# Shared with services.py, which filters a device selector on it to offer
+# only real class devices (not the main "ClassDash" device) when picking a
+# class for a virtual reminder.
+CLASS_DEVICE_MODEL = "Class"
+
+
 def class_unique_id(entry: ClassDashConfigEntry, class_name: str) -> str:
     return f"{entry.unique_id}_class_{slugify(class_name)}"
 
@@ -37,7 +43,7 @@ def class_device_info(entry: ClassDashConfigEntry, class_name: str) -> DeviceInf
         via_device=(DOMAIN, entry.unique_id),
         name=class_name,
         manufacturer="ClassDash",
-        model="Class",
+        model=CLASS_DEVICE_MODEL,
     )
 
 

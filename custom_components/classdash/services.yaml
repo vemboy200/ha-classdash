@@ -64,9 +64,11 @@ create_virtual_reminder:
         text:
     class:
       required: false
-      example: "Physics"
       selector:
-        text:
+        device:
+          filter:
+            integration: classdash
+            model: "Class"
     due:
       required: false
       selector:
@@ -91,9 +93,11 @@ edit_virtual_reminder:
         text:
     class:
       required: false
-      example: "Physics"
       selector:
-        text:
+        device:
+          filter:
+            integration: classdash
+            model: "Class"
     due:
       required: false
       selector:

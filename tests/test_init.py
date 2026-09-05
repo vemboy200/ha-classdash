@@ -30,7 +30,14 @@ FAKE_STATUS = {
 FAKE_BUNDLE = {
     **bundle_extras(),
     "status": FAKE_STATUS,
-    "due-soon": [],
+    # due_soon's own sensor now counts this list directly (plus any
+    # matching virtual reminder) rather than trusting status["dueSoon"]
+    # blindly — see sensor.py's _bucket_items — so this needs to actually
+    # hold 2 items to match FAKE_STATUS's dueSoon: 2 above.
+    "due-soon": [
+        {"id": "a1", "title": "Reading", "class": "Physics", "due": None, "tags": []},
+        {"id": "a2", "title": "Worksheet", "class": "Physics", "due": None, "tags": []},
+    ],
     "ahead": [],
     "overdue": [],
     "announcements": [],

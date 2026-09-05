@@ -138,7 +138,7 @@
         },
         "class": {
           "name": "Class",
-          "description": "Which class this belongs to — free text, doesn't have to match a class ClassDash already tracks. Leave blank for a general reminder with no class."
+          "description": "Which class this belongs to — pick one of ClassDash's own class devices. Leave blank for a general reminder with no class."
         },
         "due": {
           "name": "Due",
@@ -164,7 +164,7 @@
         },
         "class": {
           "name": "Class",
-          "description": "Which class this belongs to — free text. Leave blank to clear it (no class), not to leave it unchanged."
+          "description": "Which class this belongs to — pick one of ClassDash's own class devices. Leave blank to clear it (no class), not to leave it unchanged."
         },
         "due": {
           "name": "Due",

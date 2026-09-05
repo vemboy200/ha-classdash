@@ -6,10 +6,12 @@ already built."""
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 
 from custom_components.classdash.api import StreamEvent
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
@@ -303,3 +305,79 @@ async def test_virtual_reminder_with_no_class_gets_no_calendar(
         e for e in ent_reg.entities.values() if e.domain == "calendar" and e.platform == DOMAIN
     ]
     assert calendars == []
+
+
+async def test_virtual_reminders_count_toward_due_soon_overdue_ahead_done(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """A virtual reminder should count toward its class's (and the main
+    device's) due_soon/overdue/ahead/done sensors, not just show up on
+    the calendar — bucketed by due date/done state the same 7-day cutoff
+    real assignments use (see virtual_bucket in coordinator.py). Uses
+    dates relative to "now" rather than hardcoded ones, since this
+    file's own sibling tests have bit-rotted on hardcoded near-term
+    dates before."""
+    now = dt_util.utcnow()
+
+    def _due(**offset) -> str:
+        return (now + timedelta(**offset)).isoformat()
+
+    bundle = {
+        **bundle_extras(),
+        "status": {
+            "collectedAt": "2026-09-01T00:00:00.000Z",
+            "minutesAgo": 1,
+            "classes": 1,
+            "total": 0,
+            "dueSoon": 0,
+            "overdue": 0,
+            "ahead": 0,
+            "done": 0,
+            "announcements": 0,
+            "removed": 0,
+            "language": "en",
+        },
+        "due-soon": [],
+        "ahead": [],
+        "overdue": [],
+        "done": [],
+        "announcements": [],
+        "classes": [],
+        "virtual": [
+            _assignment("Physics", "Due soon reminder", _due(days=2), "v-soon"),
+            _assignment("Physics", "Ahead reminder", _due(days=20), "v-ahead"),
+            _assignment("Physics", "Overdue reminder", _due(days=-2), "v-overdue"),
+            _assignment(
+                "Physics", "Done reminder", _due(days=-2), "v-done", tags=["done"]
+            ),
+            _assignment(
+                "Physics", "Hidden but due soon", _due(days=1), "v-hidden", tags=["hidden"]
+            ),
+            _assignment("Physics", "Undated, not done", None, "v-undated"),
+        ],
+    }
+    entry = await _setup_with_bundle(hass, sample_certificate, bundle)
+    ent_reg = er.async_get(hass)
+
+    def _class_state(key: str):
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{class_unique_id(entry, 'Physics')}_{key}"
+        )
+        assert entity_id is not None, f"no entity for {key}"
+        return hass.states.get(entity_id)
+
+    def _main_state(key: str):
+        entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, f"{entry.unique_id}_{key}")
+        assert entity_id is not None, f"no entity for {key}"
+        return hass.states.get(entity_id)
+
+    for state_fn in (_class_state, _main_state):
+        assert state_fn("due_soon").state == "1"
+        assert state_fn("overdue").state == "1"
+        assert state_fn("ahead").state == "1"
+        assert state_fn("done").state == "1"
+
+    due_soon_titles = {
+        a["title"] for a in _class_state("due_soon").attributes["assignments"]
+    }
+    assert due_soon_titles == {"Due soon reminder"}

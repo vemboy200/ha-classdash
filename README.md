@@ -84,10 +84,10 @@ class:
 
 | Entity | What it is |
 |---|---|
-| Due soon | Total assignments due soon across every class, with the list (up to 10) as an attribute |
-| Overdue | Total overdue assignments, same attribute pattern |
-| Ahead | Total assignments due further out |
-| Done | Total turned-in work, same attribute pattern |
+| Due soon | Total assignments due soon across every class, with the list (up to 10) as an attribute. Includes virtual reminders due within a week, same as real assignments |
+| Overdue | Total overdue assignments, same attribute pattern. Includes overdue virtual reminders |
+| Ahead | Total assignments due further out. Includes virtual reminders due more than a week out |
+| Done | Total turned-in work, same attribute pattern. Includes virtual reminders marked done |
 | Announcements | Total recent teacher announcements, with a trimmed list attribute |
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
@@ -111,8 +111,16 @@ due or announced for it, same as before.
 
 | Entity | What it is |
 |---|---|
-| Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device |
+| Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device — including any virtual reminder assigned to this class, bucketed by due date/done state the same way a real assignment already is |
 | Assignments (calendar) | That class's due-soon + ahead + overdue + done assignments, plus any virtual reminder assigned to it, as calendar events — each due date/time becomes a 30-minute event. An overdue item's title gets an "(overdue)" tag, and a done one gets "(done)" — e.g. "Lab report (overdue)" — since due-soon/ahead don't need one (the due date alone already says when those are), but overdue is worth calling out plainly, and done would otherwise look identical to an undone item sharing the same due date. A virtual reminder gets the same tags: "(done)" if marked done, "(overdue)" if its due date has passed. Overdue/done items don't show up as the calendar's "next" event, they're just present when the range covers them |
+
+A virtual reminder due within a week counts as "due soon", further out
+as "ahead" — the same 7-day cutoff ClassDash uses for real assignments,
+since `/api/virtual` doesn't say which bucket a reminder would land in
+itself (only real assignments get that split server-side). An undated
+reminder that isn't marked done doesn't count toward any of the four —
+same as a real assignment, which never shows up in these buckets without
+a due date either.
 
 A class's entities aren't tied to whether anything's currently due —
 zero due items just means the sensors read 0 and the calendar shows no
@@ -172,6 +180,14 @@ is only ever surfaced by `create_virtual_reminder`'s own response (call
 it with "Response variable" set, in a script or automation, to capture
 it) — a reminder isn't its own HA entity, and unlike a real assignment's
 `id`, it doesn't show up in any sensor's attribute list either.
+
+`class` is a device picker, not free text — it only offers ClassDash's
+own class devices, so a typo can't silently create a permanent phantom
+class that never goes stale. A class with genuinely nothing due/announced
+yet (and no existing device) isn't selectable until it has one; that's
+the same "a class only gets a device once something's actually due or
+announced for it" rule everything else in this integration already
+follows.
 
 ## What's read-only here
 

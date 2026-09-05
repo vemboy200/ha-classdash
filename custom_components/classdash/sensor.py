@@ -23,6 +23,7 @@ from .coordinator import (
     ClassDashData,
     class_names,
     is_hidden,
+    virtual_bucket,
 )
 from .devices import class_device_info, class_unique_id, main_device_info
 
@@ -55,6 +56,31 @@ def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
     return {"assignments": trimmed}
 
 
+def _bucket_items(
+    data: ClassDashData, key: str, class_name: str | None = None
+) -> list[dict[str, Any]]:
+    """Real items in this bucket ("due_soon"/"overdue"/"ahead"/"done")
+    plus virtual reminders landing in the same bucket by due date/done
+    state (see virtual_bucket in coordinator.py) — optionally filtered to
+    one class. Shared by the main device's totals and each class's own
+    count, so a virtual reminder is counted the same way a real
+    assignment already is, instead of only ever showing up on a
+    calendar. Hidden items excluded from both sources."""
+    now = dt_util.now()
+
+    real = getattr(data, key)
+    if class_name is not None:
+        real = [x for x in real if x.get("class") == class_name]
+    real = [x for x in real if not is_hidden(x)]
+
+    virtual = data.virtual
+    if class_name is not None:
+        virtual = [x for x in virtual if x.get("class") == class_name]
+    virtual = [x for x in virtual if virtual_bucket(x, now) == key]
+
+    return [*real, *virtual]
+
+
 def _announcement_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
     trimmed = [
         {
@@ -85,8 +111,8 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         icon="mdi:book-clock",
         native_unit_of_measurement="assignments",
         state_class="measurement",
-        value_fn=lambda d: d.status["dueSoon"],
-        attrs_fn=lambda d: _assignment_attrs(d.due_soon),
+        value_fn=lambda d: len(_bucket_items(d, "due_soon")),
+        attrs_fn=lambda d: _assignment_attrs(_bucket_items(d, "due_soon")),
     ),
     ClassDashSensorDescription(
         key="overdue",
@@ -94,8 +120,8 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         icon="mdi:book-alert",
         native_unit_of_measurement="assignments",
         state_class="measurement",
-        value_fn=lambda d: d.status["overdue"],
-        attrs_fn=lambda d: _assignment_attrs(d.overdue),
+        value_fn=lambda d: len(_bucket_items(d, "overdue")),
+        attrs_fn=lambda d: _assignment_attrs(_bucket_items(d, "overdue")),
     ),
     ClassDashSensorDescription(
         key="ahead",
@@ -103,8 +129,8 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         icon="mdi:book-clock-outline",
         native_unit_of_measurement="assignments",
         state_class="measurement",
-        value_fn=lambda d: d.status["ahead"],
-        attrs_fn=lambda d: _assignment_attrs(d.ahead),
+        value_fn=lambda d: len(_bucket_items(d, "ahead")),
+        attrs_fn=lambda d: _assignment_attrs(_bucket_items(d, "ahead")),
     ),
     ClassDashSensorDescription(
         key="done",
@@ -112,8 +138,8 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         icon="mdi:book-check",
         native_unit_of_measurement="assignments",
         state_class="measurement",
-        value_fn=lambda d: d.status["done"],
-        attrs_fn=lambda d: _assignment_attrs(d.done),
+        value_fn=lambda d: len(_bucket_items(d, "done")),
+        attrs_fn=lambda d: _assignment_attrs(_bucket_items(d, "done")),
     ),
     ClassDashSensorDescription(
         key="announcements",
@@ -282,11 +308,7 @@ class ClassDashClassSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
         self._attr_device_info = class_device_info(entry, class_name)
 
     def _items(self) -> list[dict[str, Any]]:
-        return [
-            x
-            for x in getattr(self.coordinator.data, self._key)
-            if x.get("class") == self._class_name and not is_hidden(x)
-        ]
+        return _bucket_items(self.coordinator.data, self._key, self._class_name)
 
     @property
     def native_value(self) -> int:

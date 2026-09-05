@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import device_registry as dr
 
 from custom_components.classdash.api import (
     ClassDashAuthError,
@@ -17,6 +18,7 @@ from custom_components.classdash.api import (
     StreamEvent,
 )
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
+from custom_components.classdash.devices import class_device_info, main_device_info
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import bundle_extras
@@ -71,6 +73,17 @@ async def _setup(hass: HomeAssistant, entry: MockConfigEntry, client_mock) -> No
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
+
+
+def _class_device_id(hass: HomeAssistant, entry: MockConfigEntry, class_name: str) -> str:
+    """Registers (or looks up) a class sub-device the way sensor.py/
+    calendar.py normally would once a class shows up in real data —
+    tests exercising the `class` field's device selector need a real
+    device id to select, same as the actual UI would offer."""
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, **class_device_info(entry, class_name)
+    )
+    return device.id
 
 
 async def _setup_component_only(hass: HomeAssistant) -> bool:
@@ -243,13 +256,14 @@ async def test_create_virtual_reminder_calls_client_and_refreshes(
     )
     client.async_get_virtual = AsyncMock(return_value=[CREATED_ENTRY])
     await _setup(hass, entry, client)
+    physics_device_id = _class_device_id(hass, entry, "Physics")
 
     response = await hass.services.async_call(
         DOMAIN,
         "create_virtual_reminder",
         {
             "title": "Bring signed permission slip",
-            "class": "Physics",
+            "class": physics_device_id,
             "due": "2026-09-10T14:30:00+00:00",
         },
         blocking=True,
@@ -304,6 +318,7 @@ async def test_edit_virtual_reminder_calls_client_and_refreshes(
     )
     client.async_get_virtual = AsyncMock(return_value=[edited])
     await _setup(hass, entry, client)
+    physics_device_id = _class_device_id(hass, entry, "Physics")
 
     response = await hass.services.async_call(
         DOMAIN,
@@ -311,7 +326,7 @@ async def test_edit_virtual_reminder_calls_client_and_refreshes(
         {
             "id": "v-abc123",
             "title": "Bring signed AND initialed slip",
-            "class": "Physics",
+            "class": physics_device_id,
             "due": "2026-09-10T14:30:00+00:00",
         },
         blocking=True,
@@ -326,6 +341,80 @@ async def test_edit_virtual_reminder_calls_client_and_refreshes(
     )
     client.async_get_virtual.assert_called_once()
     assert response == edited
+
+
+async def test_create_virtual_reminder_rejects_unknown_class_device(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock()
+    await _setup(hass, entry, client)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "create_virtual_reminder",
+            {"title": "Whatever", "class": "nonexistent-device-id"},
+            blocking=True,
+        )
+    client.async_create_virtual_reminder.assert_not_called()
+
+
+async def test_create_virtual_reminder_rejects_main_device_as_class(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """The device selector is scoped to model "Class" so the main
+    "ClassDash" device shouldn't be pickable, but Developer Tools/YAML
+    can still pass any device id directly — the service itself has to
+    reject it too, not just rely on the UI filter."""
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    client.async_create_virtual_reminder = AsyncMock()
+    await _setup(hass, entry, client)
+    main_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, **main_device_info(entry)
+    )
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "create_virtual_reminder",
+            {"title": "Whatever", "class": main_device.id},
+            blocking=True,
+        )
+    client.async_create_virtual_reminder.assert_not_called()
+
+
+async def test_create_virtual_reminder_rejects_class_device_from_other_entry(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry_a = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client_a = AsyncMock()
+    client_a.async_stream_updates = _open_stream
+    client_a.async_create_virtual_reminder = AsyncMock()
+    await _setup(hass, entry_a, client_a)
+
+    entry_b = _entry("192.168.1.51:8734", sample_certificate.pem)
+    client_b = AsyncMock()
+    client_b.async_stream_updates = _open_stream
+    await _setup(hass, entry_b, client_b)
+    other_entrys_device_id = _class_device_id(hass, entry_b, "Physics")
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "create_virtual_reminder",
+            {
+                "title": "Whatever",
+                "class": other_entrys_device_id,
+                "config_entry_id": entry_a.entry_id,
+            },
+            blocking=True,
+        )
+    client_a.async_create_virtual_reminder.assert_not_called()
 
 
 async def test_create_virtual_reminder_surfaces_validation_error(

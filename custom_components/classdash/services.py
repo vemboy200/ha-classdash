@@ -29,6 +29,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from .api import (
@@ -38,6 +39,7 @@ from .api import (
 )
 from .const import DOMAIN
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator
+from .devices import CLASS_DEVICE_MODEL
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_ID = "id"
@@ -58,6 +60,15 @@ SERVICE_SCHEMA = vol.Schema(
 # a required title on top (create's title is also required; edit's just
 # happens to matter more to call out, since it's easy to assume a blank
 # field there means "leave unchanged").
+#
+# ATTR_CLASS carries a device_id, not a class name — services.yaml scopes
+# its selector to this integration's own "Class"-model devices, so the UI
+# only ever offers classes ClassDash currently tracks. A free-text class
+# name here previously let a typo (or a class ClassDash doesn't track at
+# all) spawn its own permanent phantom class device, since nothing outside
+# a real collection pass ever tells this integration such a class doesn't
+# really exist. _resolve_class_name below turns the selected device back
+# into the plain name ClassDash's API actually wants.
 _VIRTUAL_FIELDS = {
     vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     vol.Required(ATTR_TITLE): cv.string,
@@ -161,6 +172,24 @@ async def _async_call_and_refresh(
     return result.get("entry")
 
 
+def _resolve_class_name(
+    hass: HomeAssistant, entry: ClassDashConfigEntry, device_id: str
+) -> str:
+    """Turn a class device (picked via the `class` field's device selector)
+    back into the plain name ClassDash's own API expects — `device.name` is
+    that name verbatim, same as `stale_class_devices` already relies on."""
+    device = dr.async_get(hass).async_get(device_id)
+    if (
+        device is None
+        or entry.entry_id not in device.config_entries
+        or device.model != CLASS_DEVICE_MODEL
+    ):
+        raise ServiceValidationError(
+            f"{device_id} isn't a ClassDash class device on this config entry"
+        )
+    return device.name
+
+
 def _due_iso(call: ServiceCall) -> str | None:
     due = call.data.get(ATTR_DUE)
     # HA's own datetime selector/cv.datetime can hand back a naive
@@ -174,11 +203,16 @@ def _due_iso(call: ServiceCall) -> str | None:
 async def _async_create_virtual(call: ServiceCall) -> ServiceResponse:
     entry = _resolve_entry(call.hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
     coordinator: ClassDashCoordinator = entry.runtime_data
+    class_device_id = call.data.get(ATTR_CLASS)
     return await _async_call_and_refresh(
         coordinator,
         coordinator.client.async_create_virtual_reminder(
             title=call.data[ATTR_TITLE],
-            class_name=call.data.get(ATTR_CLASS),
+            class_name=(
+                _resolve_class_name(call.hass, entry, class_device_id)
+                if class_device_id
+                else None
+            ),
             due=_due_iso(call),
         ),
     )
@@ -187,12 +221,17 @@ async def _async_create_virtual(call: ServiceCall) -> ServiceResponse:
 async def _async_edit_virtual(call: ServiceCall) -> ServiceResponse:
     entry = _resolve_entry(call.hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
     coordinator: ClassDashCoordinator = entry.runtime_data
+    class_device_id = call.data.get(ATTR_CLASS)
     return await _async_call_and_refresh(
         coordinator,
         coordinator.client.async_edit_virtual_reminder(
             item_id=call.data[ATTR_ID],
             title=call.data[ATTR_TITLE],
-            class_name=call.data.get(ATTR_CLASS),
+            class_name=(
+                _resolve_class_name(call.hass, entry, class_device_id)
+                if class_device_id
+                else None
+            ),
             due=_due_iso(call),
         ),
     )
