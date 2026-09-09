@@ -60,7 +60,7 @@ def _data(
 
 def test_event_is_the_soonest_not_yet_ended() -> None:
     data = _data(
-        due_soon=[_assignment("Lab report", "2026-09-05T23:59:00+00:00", item_id="soon")],
+        due_soon=[_assignment("Lab report", "2026-09-20T23:59:00+00:00", item_id="soon")],
         ahead=[_assignment("Final project", "2026-10-01T23:59:00+00:00", item_id="ahead")],
         overdue=[_assignment("Old worksheet", "2026-08-01T23:59:00+00:00", item_id="overdue")],
     )
@@ -77,7 +77,7 @@ def test_event_is_none_when_everything_is_over() -> None:
 
 def test_event_ignores_other_classes() -> None:
     data = _data(
-        due_soon=[_assignment("Not physics", "2026-09-05T23:59:00+00:00", class_name="Biology")]
+        due_soon=[_assignment("Not physics", "2026-09-20T23:59:00+00:00", class_name="Biology")]
     )
     assert _calendar(data).event is None
 
@@ -88,7 +88,7 @@ async def test_async_get_events_includes_overdue_in_range() -> None:
     events in a range that covers them — this is the difference between
     "due-soon + ahead only" and "everything with a due date"."""
     data = _data(
-        due_soon=[_assignment("Upcoming", "2026-09-05T23:59:00+00:00", item_id="upcoming")],
+        due_soon=[_assignment("Upcoming", "2026-09-20T23:59:00+00:00", item_id="upcoming")],
         overdue=[_assignment("Late", "2026-08-01T23:59:00+00:00", item_id="late")],
     )
     events = await _calendar(data).async_get_events(
@@ -101,7 +101,7 @@ async def test_async_get_events_includes_overdue_in_range() -> None:
 
 async def test_async_get_events_respects_the_range() -> None:
     data = _data(
-        due_soon=[_assignment("In range", "2026-09-05T23:59:00+00:00", item_id="in")],
+        due_soon=[_assignment("In range", "2026-09-20T23:59:00+00:00", item_id="in")],
         ahead=[_assignment("Out of range", "2027-01-01T23:59:00+00:00", item_id="out")],
     )
     events = await _calendar(data).async_get_events(
@@ -125,7 +125,7 @@ def test_done_items_appear_tagged() -> None:
     now show up like anything else, tagged so they're distinguishable
     from an undone item sharing the same due date."""
     data = _data(
-        done=[_assignment("Lab report", "2026-09-05T23:59:00+00:00", item_id="done1")]
+        done=[_assignment("Lab report", "2026-09-20T23:59:00+00:00", item_id="done1")]
     )
     events = _calendar(data)._events()
     assert events[0].summary == "Lab report (done)"
@@ -133,7 +133,7 @@ def test_done_items_appear_tagged() -> None:
 
 def test_due_soon_and_ahead_are_not_tagged() -> None:
     data = _data(
-        due_soon=[_assignment("Soon", "2026-09-05T23:59:00+00:00", item_id="soon")],
+        due_soon=[_assignment("Soon", "2026-09-20T23:59:00+00:00", item_id="soon")],
         ahead=[_assignment("Later", "2026-10-01T23:59:00+00:00", item_id="later")],
     )
     events = {e.uid: e.summary for e in _calendar(data)._events()}
@@ -174,7 +174,7 @@ def test_hidden_items_excluded_regardless_of_tag() -> None:
         done=[
             _assignment(
                 "Dismissed done",
-                "2026-09-05T23:59:00+00:00",
+                "2026-09-20T23:59:00+00:00",
                 item_id="h2",
                 tags=["hidden"],
             )
