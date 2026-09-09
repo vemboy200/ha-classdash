@@ -69,8 +69,11 @@ class ClassDashData:
     # app's own check has run at least once. Unlike everything else in
     # this snapshot, this can go stale between real pushes: writing
     # update-status.json doesn't trigger a broadcast on its own (only the
-    # state/stream files are watched), so update.py refetches it directly
-    # after its own dismiss/download calls instead of waiting on one.
+    # state/stream files are watched) — update.py is purely read-only, so
+    # this just lags behind an in-progress check/download until the next
+    # real collection pass happens to broadcast, rather than refetching
+    # it directly the way an earlier, interactive version of that entity
+    # used to.
     update_status: dict[str, Any]
 
 
