@@ -228,19 +228,19 @@ async def test_done_virtual_reminders_tagged_hidden_ones_excluded(
             _assignment(
                 "Physics",
                 "Already done",
-                "2026-09-10T00:00:00+00:00",
+                "2026-10-10T00:00:00+00:00",
                 "v1",
                 tags=["done"],
             ),
             _assignment(
                 "Physics",
                 "Dismissed",
-                "2026-09-11T00:00:00+00:00",
+                "2026-10-11T00:00:00+00:00",
                 "v2",
                 tags=["hidden"],
             ),
             _assignment(
-                "Physics", "Still relevant", "2026-09-12T00:00:00+00:00", "v3"
+                "Physics", "Still relevant", "2026-10-12T00:00:00+00:00", "v3"
             ),
         ],
     }
@@ -250,8 +250,8 @@ async def test_done_virtual_reminders_tagged_hidden_ones_excluded(
     calendar_id = ent_reg.async_get_entity_id(
         "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
     )
-    # "Already done" is now the soonest not-yet-ended event (2026-09-10,
-    # before "Still relevant"'s 2026-09-12) — done items show up on the
+    # "Already done" is now the soonest not-yet-ended event (2026-10-10,
+    # before "Still relevant"'s 2026-10-12) — done items show up on the
     # calendar now, tagged, rather than being excluded outright.
     assert hass.states.get(calendar_id).attributes["message"] == "Already done (done)"
 
