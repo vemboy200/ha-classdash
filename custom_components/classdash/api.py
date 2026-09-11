@@ -272,6 +272,18 @@ class ClassDashClient:
             {"id": item_id, "title": title, "class": class_name, "due": due},
         )
 
+    async def async_mark_virtual_done(self, item_id: str) -> None:
+        """Mark a virtual reminder done — /api/virtual/done. Unlike a real
+        assignment (whose "done" bucket is purely server-detected — see
+        ClassDash's own CONTRIBUTING.md — there's no writable "done" for
+        one of those), a virtual reminder's done state is entirely
+        ClassDash's own, set here directly, same as create/edit already
+        write other fields of one."""
+        await self._post("/api/virtual/done", {"id": item_id})
+
+    async def async_unmark_virtual_done(self, item_id: str) -> None:
+        await self._post("/api/virtual/undone", {"id": item_id})
+
     async def async_dismiss_update(self, version: str) -> None:
         """Mark `version` seen-and-dismissed — the same thing ClassDash's
         own update banner's dismiss button does. A no-op server-side if no

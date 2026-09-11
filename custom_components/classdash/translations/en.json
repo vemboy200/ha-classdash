@@ -65,6 +65,9 @@
     },
     "update": {
       "app_update": { "name": "App update" }
+    },
+    "todo": {
+      "todo_list": { "name": "To-do list" }
     }
   },
   "services": {

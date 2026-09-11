@@ -74,7 +74,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: done
-    comment: 95% line coverage as of 2026-08-30 (pytest-cov), including the
+    comment: 97% line coverage as of 2026-09-11 (pytest-cov), including the
       certificate-pinning logic against a real throwaway TLS server and the
       client's HTTP/SSE parsing against a real aiohttp test server — not just
       mocked-away happy paths.

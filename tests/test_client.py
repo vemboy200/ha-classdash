@@ -362,6 +362,59 @@ async def test_async_edit_virtual_reminder_posts_full_replacement(
     }
 
 
+async def test_async_mark_virtual_done_posts_id_in_body(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+
+    async def done(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/done", done)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await client.async_mark_virtual_done("v-abc123") is None
+
+    assert received["body"] == {"id": "v-abc123"}
+
+
+async def test_async_unmark_virtual_done_posts_id_in_body(
+    cert_factory, socket_enabled
+) -> None:
+    received: dict = {}
+
+    async def undone(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post("/api/virtual/undone", undone)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await client.async_unmark_virtual_done("v-abc123") is None
+
+    assert received["body"] == {"id": "v-abc123"}
+
+
+async def test_async_mark_virtual_done_401_raises_auth_error(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/virtual/done", _unauthorized)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            with pytest.raises(ClassDashAuthError):
+                await client.async_mark_virtual_done("x1")
+
+
 async def test_async_create_virtual_reminder_400_raises_validation_error(
     cert_factory, socket_enabled
 ) -> None:

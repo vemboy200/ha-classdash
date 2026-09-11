@@ -21,6 +21,7 @@ PLATFORMS: list[Platform] = [
     Platform.CALENDAR,
     Platform.BUTTON,
     Platform.UPDATE,
+    Platform.TODO,
 ]
 
 
