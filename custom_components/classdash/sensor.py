@@ -173,7 +173,7 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
             key=f"check_status_{platform}",
             translation_key=f"check_status_{platform}",
             device_class=SensorDeviceClass.ENUM,
-            options=["ok", "problem", "unknown"],
+            options=["ok", "fallback", "problem", "unknown"],
             value_fn=lambda d, platform=platform: d.check_status[platform]["status"],
             icon_fn=lambda d, platform=platform: CHECK_STATUS_ICONS[
                 d.check_status[platform]["status"]
@@ -206,6 +206,7 @@ CLASS_SENSOR_ICONS = {
 # already the entity's own name).
 CHECK_STATUS_ICONS = {
     "ok": "mdi:cloud-check-variant",
+    "fallback": "mdi:cloud-sync",
     "problem": "mdi:cloud-alert",
     "unknown": "mdi:cloud-question",
 }

@@ -45,15 +45,15 @@
       "last_collected": { "name": "Last collected" },
       "check_status_classroom": {
         "name": "Classroom status",
-        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+        "state": { "ok": "OK", "fallback": "Fallback", "problem": "Problem", "unknown": "Unknown" }
       },
       "check_status_canvas": {
         "name": "Canvas status",
-        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+        "state": { "ok": "OK", "fallback": "Fallback", "problem": "Problem", "unknown": "Unknown" }
       },
       "check_status_edpuzzle": {
         "name": "Edpuzzle status",
-        "state": { "ok": "OK", "problem": "Problem", "unknown": "Unknown" }
+        "state": { "ok": "OK", "fallback": "Fallback", "problem": "Problem", "unknown": "Unknown" }
       }
     },
     "calendar": {

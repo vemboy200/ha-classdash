@@ -89,9 +89,9 @@ async def test_check_status_sensors_reflect_platform_health(
         "check-status": {
             "classroom": {"status": "ok", "at": "2026-09-01T00:00:00.000Z", "detail": None},
             "canvas": {
-                "status": "problem",
+                "status": "fallback",
                 "at": "2026-08-31T23:00:00.000Z",
-                "detail": "timed out",
+                "detail": "Fallback: the API failed, so Google sign-in was used",
             },
             "edpuzzle": {"status": "unknown", "at": None, "detail": None},
         },
@@ -111,9 +111,9 @@ async def test_check_status_sensors_reflect_platform_health(
     assert classroom.attributes["icon"] == "mdi:cloud-check-variant"
 
     canvas = _state_for("check_status_canvas")
-    assert canvas.state == "problem"
-    assert canvas.attributes["detail"] == "timed out"
-    assert canvas.attributes["icon"] == "mdi:cloud-alert"
+    assert canvas.state == "fallback"
+    assert canvas.attributes["detail"].startswith("Fallback: ")
+    assert canvas.attributes["icon"] == "mdi:cloud-sync"
 
     edpuzzle = _state_for("check_status_edpuzzle")
     assert edpuzzle.state == "unknown"
