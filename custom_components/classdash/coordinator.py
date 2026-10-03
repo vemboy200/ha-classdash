@@ -256,6 +256,8 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         self.last_update_success = False
         self._connected = False
         self._logged_unreachable = False
+        # The wait between reconnect attempts, while one is under way.
+        self._backoff_wait: asyncio.Future[None] | None = None
         # Which classes sensor.py/calendar.py have each already added
         # entities for, *this process*. Deliberately not derived from the
         # entity/device registry — those persist across a restart on
@@ -382,5 +384,24 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 )
                 self._connection_lost(err, backoff)
 
-            await asyncio.sleep(backoff)
+            # As a task of its own so async_reconnect_now can cut it short.
+            self._backoff_wait = asyncio.ensure_future(asyncio.sleep(backoff))
+            try:
+                await self._backoff_wait
+            except asyncio.CancelledError:
+                # Cut short by async_reconnect_now: reconnect right away.
+                # Anything else cancelling (the entry unloading) still ends
+                # this task.
+                if asyncio.current_task().cancelling():
+                    raise
+            finally:
+                self._backoff_wait = None
             backoff = min(backoff * 2, STREAM_RECONNECT_MAX_SECONDS)
+
+    @callback
+    def async_reconnect_now(self) -> None:
+        """Skip the rest of the reconnect wait, when ClassDash is known to
+        be back: it announced itself on the network (config_flow.py's
+        zeroconf step)."""
+        if self._backoff_wait is not None:
+            self._backoff_wait.cancel()

@@ -91,6 +91,11 @@ def fingerprint_from_der(der: bytes) -> str:
     return ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
 
 
+def fingerprint_from_pem(pem: str) -> str:
+    """The same fingerprint, for a certificate already pinned as PEM."""
+    return fingerprint_from_der(ssl.PEM_cert_to_DER_cert(pem))
+
+
 def pem_from_der(der: bytes) -> str:
     """Convert a DER certificate to PEM, for use as pinned CA data."""
     return ssl.DER_cert_to_PEM_cert(der)

@@ -16,10 +16,16 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_RECONFIGURE,
+    ConfigEntryState,
+    ConfigFlow,
+    ConfigFlowResult,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import (
     ClassDashAuthError,
@@ -28,6 +34,7 @@ from .api import (
     build_ssl_context,
     fetch_server_certificate,
     fingerprint_from_der,
+    fingerprint_from_pem,
     pem_from_der,
 )
 from .const import CONF_CERT_PEM, DEFAULT_PORT, DOMAIN
@@ -105,6 +112,51 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """ClassDash announced itself on the network (only while its home
+        API is open to it). It does so whenever it starts, and again with
+        its new address when that changes.
+
+        One already set up is recognized by its certificate's fingerprint,
+        which the announcement carries, rather than by address: then this
+        follows it to a new address, or, at the same address, tells it to
+        reconnect now instead of waiting out the reconnect backoff.
+        """
+        host = discovery_info.host
+        port = discovery_info.port
+        announced_fingerprint = discovery_info.properties.get("fp")
+        for entry in self._async_current_entries(include_ignore=False):
+            if fingerprint_from_pem(entry.data[CONF_CERT_PEM]) != announced_fingerprint:
+                continue
+            if (entry.data[CONF_HOST], entry.data[CONF_PORT]) != (host, port):
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_HOST: host, CONF_PORT: port}
+                )
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            elif entry.state is ConfigEntryState.LOADED:
+                entry.runtime_data.async_reconnect_now()
+            return self.async_abort(reason="already_configured")
+
+        # A new one: the same confirm step as setting it up by hand, where
+        # the fingerprint shown is the one fetched here, not the announced
+        # one, and the token still has to be entered.
+        await self.async_set_unique_id(f"{host}:{port}")
+        self._abort_if_unique_id_configured()
+        try:
+            der = await fetch_server_certificate(host, port)
+        except ClassDashConnectionError:
+            return self.async_abort(reason="cannot_connect")
+        self._host = host
+        self._port = port
+        self._fingerprint = fingerprint_from_der(der)
+        self._cert_pem = pem_from_der(der)
+        self.context["title_placeholders"] = {
+            "name": discovery_info.name.removesuffix(f".{discovery_info.type}")
+        }
+        return await self.async_step_confirm()
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None

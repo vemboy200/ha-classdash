@@ -354,3 +354,56 @@ async def test_manual_refresh_only_succeeds_while_connected(
         await asyncio.wait_for(dropped.wait(), timeout=2)
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
+
+
+async def test_reconnect_now_skips_the_backoff_wait(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """ClassDash announcing itself on the network means it's back: the
+    reconnect happens then, not after the rest of the backoff (an hour
+    here, so only async_reconnect_now can end it in time)."""
+    attempts = 0
+
+    async def stream():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ClassDashConnectionError("refused")
+        yield StreamEvent("update", BUNDLE_1)
+        await asyncio.Event().wait()
+
+    coordinator = _make_coordinator(hass, entry, stream)
+    with patch(
+        "custom_components.classdash.coordinator.STREAM_RECONNECT_MIN_SECONDS", 3600
+    ):
+        task = coordinator.async_start()
+        try:
+            await _wait_for(lambda: coordinator._backoff_wait is not None)
+            coordinator.async_reconnect_now()
+            await _wait_for(lambda: coordinator.data is not None)
+            assert attempts == 2
+            assert coordinator.last_update_success is True
+        finally:
+            task.cancel()
+    # Unloading still ends the listener, even mid-wait.
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+async def test_cancelling_during_the_backoff_wait_stops_the_listener(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    async def stream():
+        raise ClassDashConnectionError("refused")
+        yield  # pragma: no cover
+
+    coordinator = _make_coordinator(hass, entry, stream)
+    with patch(
+        "custom_components.classdash.coordinator.STREAM_RECONNECT_MIN_SECONDS", 3600
+    ):
+        task = coordinator.async_start()
+        await _wait_for(lambda: coordinator._backoff_wait is not None)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert coordinator._backoff_wait is None

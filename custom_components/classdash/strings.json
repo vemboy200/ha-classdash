@@ -1,5 +1,6 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "Connect to ClassDash",
@@ -30,6 +31,7 @@
     },
     "abort": {
       "already_configured": "This ClassDash server is already configured.",
+      "cannot_connect": "Couldn't connect to ClassDash.",
       "reauth_successful": "Re-authentication was successful.",
       "reconfigure_successful": "Reconfiguration was successful."
     }

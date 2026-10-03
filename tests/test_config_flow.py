@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from ipaddress import ip_address
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.classdash.api import ClassDashAuthError, ClassDashConnectionError
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
@@ -279,3 +281,122 @@ async def test_reauth_updates_token(
     assert result["reason"] == "reauth_successful"
     assert entry.data["token"] == "new-token"
     assert entry.data[CONF_CERT_PEM] == sample_certificate.pem
+
+
+def _discovery(host: str = "192.168.1.60", port: int = 8734, fp: str = "") -> ZeroconfServiceInfo:
+    return ZeroconfServiceInfo(
+        ip_address=ip_address(host),
+        ip_addresses=[ip_address(host)],
+        hostname="classdash-laptop.local.",
+        name="ClassDash on Laptop._classdash._tcp.local.",
+        port=port,
+        type="_classdash._tcp.local.",
+        properties={"api": "1", "fp": fp},
+    )
+
+
+async def test_zeroconf_discovers_a_new_classdash(
+    hass: HomeAssistant, mock_fetch_cert, mock_status_ok, mock_setup_entry
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_discovery(fp=mock_fetch_cert.fingerprint),
+    )
+    # Straight to the token: the address came from the announcement.
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "confirm"
+    assert result["description_placeholders"]["fingerprint"] == mock_fetch_cert.fingerprint
+    flow = hass.config_entries.flow.async_get(result["flow_id"])
+    assert flow["context"]["title_placeholders"] == {"name": "ClassDash on Laptop"}
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], TOKEN_INPUT)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["host"] == "192.168.1.60"
+    assert result["data"]["port"] == 8734
+    assert result["data"][CONF_CERT_PEM] == mock_fetch_cert.pem
+    assert result["result"].unique_id == "192.168.1.60:8734"
+
+
+async def test_zeroconf_cannot_connect_aborts(hass: HomeAssistant) -> None:
+    with patch(
+        "custom_components.classdash.config_flow.fetch_server_certificate",
+        AsyncMock(side_effect=ClassDashConnectionError("refused")),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
+
+
+async def test_zeroconf_follows_a_known_classdash_to_a_new_address(
+    hass: HomeAssistant, sample_certificate, mock_setup_entry
+) -> None:
+    """Recognized by its certificate, not its address, so a new address
+    updates the entry (and reloads it) instead of offering a second one."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.50:8734",
+        data={**USER_INPUT, **TOKEN_INPUT, CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_discovery("192.168.1.60", 8735, fp=sample_certificate.fingerprint),
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == "192.168.1.60"
+    assert entry.data["port"] == 8735
+    assert entry.data["token"] == TOKEN_INPUT["token"]
+    assert mock_setup_entry.call_count == 1
+
+
+async def test_zeroconf_at_the_same_address_reconnects_now(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.50:8734",
+        data={**USER_INPUT, **TOKEN_INPUT, CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+    entry.mock_state(hass, config_entries.ConfigEntryState.LOADED)
+    entry.runtime_data = MagicMock()
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_discovery("192.168.1.50", 8734, fp=sample_certificate.fingerprint),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    entry.runtime_data.async_reconnect_now.assert_called_once()
+    assert entry.data["host"] == "192.168.1.50"
+
+
+async def test_zeroconf_for_another_certificate_is_a_new_classdash(
+    hass: HomeAssistant, sample_certificate, mock_fetch_cert
+) -> None:
+    """A different fingerprint is a different ClassDash, even at an
+    address an entry once had: it isn't moved onto that entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.50:8734",
+        data={**USER_INPUT, **TOKEN_INPUT, CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_discovery("192.168.1.60", fp="AA:BB"),
+    )
+    assert result["step_id"] == "confirm"
+    assert entry.data["host"] == "192.168.1.50"

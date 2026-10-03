@@ -97,12 +97,11 @@ rules:
       potentially sensitive info could be from children as young as 6 years
       old (1st grade). Exposing this info to the public is not a good idea.
   discovery:
-    status: exempt
-    comment: No discovery protocol exists for an arbitrary LAN host:port; ClassDash's
-      home API has no mDNS/SSDP/zeroconf presence to discover.
+    status: done
+    comment: Zeroconf (_classdash._tcp), which ClassDash announces while its home API is open to the network.
   discovery-update-info:
-    status: exempt
-    comment: No discovery (see above).
+    status: done
+    comment: A ClassDash already set up is recognized by the certificate fingerprint in its announcement and moved to its new address.
   docs-data-update: done
   docs-examples:
     status: todo

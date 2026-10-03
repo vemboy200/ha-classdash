@@ -23,8 +23,7 @@ is tracked in
 - ClassDash's home API running and reachable (`npm run api`, or the
   settings-panel toggle), with the bearer token and certificate fingerprint
   it prints on startup handy
-- Home Assistant 2024.6 or newer (uses the `runtime_data` config-entry
-  pattern)
+- Home Assistant 2026.8 or newer
 
 ## Install
 
@@ -36,7 +35,7 @@ config's `custom_components/` folder and restart Home Assistant.
 
 ## Setup
 
-Settings → Devices & Services → Add Integration → ClassDash.
+When ClassDash's home API is open to your network, it announces itself (mDNS, as `_classdash._tcp`), and Home Assistant offers it under Settings → Devices & Services → Discovered, as "ClassDash on <computer name>". Adding it from there skips step 1 below. Otherwise: Settings → Devices & Services → Add Integration → ClassDash.
 
 1. Enter the host/IP and port (default `8734`) of the computer running
    ClassDash's home API.
@@ -60,7 +59,9 @@ change, just the token.
 
 ### If the server moves
 
-Settings → Devices & Services → ClassDash → Reconfigure lets you change
+If ClassDash announces itself (see Setup), there's nothing to do: Home Assistant recognizes it by its certificate's fingerprint, which the announcement carries, and follows it to its new address. The same announcement when ClassDash starts up also makes Home Assistant reconnect right away, instead of at its next reconnect attempt (up to a minute later).
+
+Otherwise, Settings → Devices & Services → ClassDash → Reconfigure lets you change
 the host/port without removing and re-adding the entry. It runs through
 the exact same fingerprint-confirmation and token steps as initial setup
 — a different address might be a genuinely different server.
