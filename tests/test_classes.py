@@ -51,6 +51,9 @@ def _status(**counts) -> dict:
         "announcements": counts.get("announcements", 0),
         "removed": 0,
         "language": "en",
+        "collecting": False,
+        "schoolToday": None,
+        "scheduleToday": None,
     }
 
 

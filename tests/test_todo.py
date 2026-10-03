@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.components.todo import TodoItemStatus
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
@@ -35,6 +35,9 @@ BASE_STATUS = {
     "announcements": 0,
     "removed": 0,
     "language": "en",
+    "collecting": False,
+    "schoolToday": None,
+    "scheduleToday": None,
 }
 
 
@@ -120,7 +123,9 @@ async def test_combines_real_and_virtual_items(
     assert state is not None
     # 5 items total, 3 not-yet-done (state = count of NEEDS_ACTION items).
     assert state.state == "3"
-    assert state.attributes["supported_features"] == 4  # UPDATE_TODO_ITEM only
+    # UPDATE_TODO_ITEM | DELETE_TODO_ITEM — no create: a real assignment
+    # can't be made from here, and reminders have classdash.create_virtual_reminder.
+    assert state.attributes["supported_features"] == 6
 
 
 async def test_todo_items_have_correct_status_and_summary(
@@ -358,3 +363,54 @@ async def test_update_surfaces_connection_error(
                 {"entity_id": entity_id, "item": "v-aaa11111", "status": "completed"},
                 blocking=True,
             )
+
+
+async def test_deleting_a_reminder_deletes_it_in_classdash(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    bundle = _bundle(
+        virtual=[_assignment("Biology", "Study notes", None, "v-aaa11111")]
+    )
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_delete_virtual = AsyncMock()
+        await _setup_with_bundle(hass, sample_certificate, mock_client_cls, bundle)
+
+        await hass.services.async_call(
+            "todo",
+            "remove_item",
+            {"entity_id": _entity_id(hass), "item": "v-aaa11111"},
+            blocking=True,
+        )
+
+        mock_client_cls.return_value.async_delete_virtual.assert_called_once_with(
+            "v-aaa11111"
+        )
+
+
+async def test_deleting_an_assignment_is_refused_and_deletes_nothing(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """ClassDash only reads real assignments, so they can't be deleted. A
+    request mixing one with a reminder is refused as a whole, so it
+    doesn't half-happen."""
+    bundle = _bundle(
+        due_soon=[_assignment("Biology", "Lab report", None, "d1")],
+        virtual=[_assignment("Biology", "Study notes", None, "v-aaa11111")],
+    )
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_delete_virtual = AsyncMock()
+        await _setup_with_bundle(hass, sample_certificate, mock_client_cls, bundle)
+
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                "todo",
+                "remove_item",
+                {"entity_id": _entity_id(hass), "item": ["v-aaa11111", "d1"]},
+                blocking=True,
+            )
+
+        mock_client_cls.return_value.async_delete_virtual.assert_not_called()

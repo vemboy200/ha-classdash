@@ -2,7 +2,7 @@ rules:
   # Bronze
   action-setup:
     status: done
-    comment: hide/unhide/mute/unmute/create_virtual_reminder/edit_virtual_reminder
+    comment: hide/unhide/mute/unmute and create/edit/delete_virtual_reminder
       all registered in async_setup (services.py), not async_setup_entry —
       none of them are scoped to one config entry.
   appropriate-polling:
@@ -29,7 +29,7 @@ rules:
       its own core PR.
   docs-actions:
     status: done
-    comment: hide/unhide/mute/unmute and create/edit_virtual_reminder all
+    comment: hide/unhide/mute/unmute and create/edit/delete_virtual_reminder all
       documented in the README, with why they're services rather than entity
       actions (no natural entity to attach one to) and, for the virtual-
       reminder pair specifically, that edit always replaces title/class/due

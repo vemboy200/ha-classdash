@@ -147,6 +147,18 @@ def is_hidden(item: dict[str, Any]) -> bool:
     return "hidden" in item.get("tags", [])
 
 
+# Matches 24-virtual-assignments.js's own create() ('v-' + 8 random
+# bytes hex) — the only way this integration has to tell a virtual
+# reminder's id apart from a real assignment's (a Classroom/Canvas/
+# Edpuzzle internal id, never in this shape), and so which of ClassDash's
+# write endpoints an id belongs to.
+VIRTUAL_ID_PREFIX = "v-"
+
+
+def is_virtual_id(item_id: str) -> bool:
+    return item_id.startswith(VIRTUAL_ID_PREFIX)
+
+
 def is_done(item: dict[str, Any]) -> bool:
     """Turned in / marked done. Used to keep completed virtual reminders
     off a class's calendar — /api/virtual mixes every state into one

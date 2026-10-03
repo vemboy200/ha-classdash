@@ -290,6 +290,19 @@ class ClassDashClient:
     async def async_unmark_virtual_done(self, item_id: str) -> None:
         await self._post("/api/virtual/undone", {"id": item_id})
 
+    async def async_hide_virtual(self, item_id: str) -> None:
+        """Hide a virtual reminder — /api/virtual/hide, the reminder
+        counterpart of async_hide."""
+        await self._post("/api/virtual/hide", {"id": item_id})
+
+    async def async_unhide_virtual(self, item_id: str) -> None:
+        await self._post("/api/virtual/unhide", {"id": item_id})
+
+    async def async_delete_virtual(self, item_id: str) -> None:
+        """Delete a virtual reminder for good — /api/virtual/delete. The
+        one write in ClassDash's API with no undo."""
+        await self._post("/api/virtual/delete", {"id": item_id})
+
     async def async_dismiss_update(self, version: str) -> None:
         """Mark `version` seen-and-dismissed — the same thing ClassDash's
         own update banner's dismiss button does. A no-op server-side if no

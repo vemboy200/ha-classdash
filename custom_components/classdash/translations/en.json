@@ -81,7 +81,7 @@
   "services": {
     "hide": {
       "name": "Hide assignment",
-      "description": "Dismisses an assignment — the same \"hide\" a click on ClassDash's own summary page does.",
+      "description": "Dismisses an assignment or a virtual reminder — the same \"hide\" a click on ClassDash's own summary page does.",
       "fields": {
         "config_entry_id": {
           "name": "ClassDash server",
@@ -95,7 +95,7 @@
     },
     "unhide": {
       "name": "Unhide assignment",
-      "description": "Reverses hide — the assignment counts and shows up again.",
+      "description": "Reverses hide — the assignment or reminder counts and shows up again.",
       "fields": {
         "config_entry_id": {
           "name": "ClassDash server",
@@ -132,6 +132,20 @@
         "id": {
           "name": "Assignment ID",
           "description": "The id field from the assignment's own list attribute."
+        }
+      }
+    },
+    "delete_virtual_reminder": {
+      "name": "Delete virtual reminder",
+      "description": "Deletes a virtual reminder for good. This can't be undone; hide it instead to keep it.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ClassDash server",
+          "description": "Only needed if more than one ClassDash server is configured."
+        },
+        "id": {
+          "name": "Reminder ID",
+          "description": "The reminder's id, starting with \"v-\" (e.g. from the To-do list or a sensor's assignment list)."
         }
       }
     },

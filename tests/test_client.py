@@ -145,6 +145,34 @@ async def test_async_check_posts_and_returns_nothing(
             assert await client.async_check() is None
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("async_hide_virtual", "/api/virtual/hide"),
+        ("async_unhide_virtual", "/api/virtual/unhide"),
+        ("async_delete_virtual", "/api/virtual/delete"),
+    ],
+)
+async def test_virtual_reminder_writes_post_the_id(
+    cert_factory, socket_enabled, method: str, path: str
+) -> None:
+    received: dict = {}
+
+    async def handler(request: web.Request) -> web.Response:
+        received["body"] = await request.json()
+        return web.Response(status=200)
+
+    app = web.Application()
+    app.router.add_post(path, handler)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await getattr(client, method)("v-1a2b3c4d") is None
+
+    assert received["body"] == {"id": "v-1a2b3c4d"}
+
+
 async def test_async_stop_posts_and_returns_nothing(
     cert_factory, socket_enabled
 ) -> None:

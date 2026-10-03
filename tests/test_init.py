@@ -26,6 +26,9 @@ FAKE_STATUS = {
     "announcements": 4,
     "removed": 0,
     "language": "en",
+    "collecting": False,
+    "schoolToday": None,
+    "scheduleToday": None,
 }
 FAKE_BUNDLE = {
     **bundle_extras(),

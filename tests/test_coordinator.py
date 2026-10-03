@@ -33,7 +33,7 @@ from .conftest import bundle_extras
 
 BUNDLE_1 = {
     **bundle_extras(),
-    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 1, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
+    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 1, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0, "collectedAt": "2026-08-30T12:00:00.000Z", "minutesAgo": 1, "classes": 0, "total": 0, "removed": 0, "language": "en"},
     "due-soon": [{"title": "first"}],
     "ahead": [],
     "overdue": [],
@@ -42,7 +42,7 @@ BUNDLE_1 = {
 }
 BUNDLE_2 = {
     **bundle_extras(),
-    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 2, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
+    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 2, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0, "collectedAt": "2026-08-30T12:00:00.000Z", "minutesAgo": 1, "classes": 0, "total": 0, "removed": 0, "language": "en"},
     "due-soon": [{"title": "first"}, {"title": "second"}],
     "ahead": [],
     "overdue": [],
@@ -187,7 +187,7 @@ async def test_heartbeat_before_any_update_is_ignored(
     heartbeat_seen = asyncio.Event()
 
     async def fake_stream():
-        yield StreamEvent("heartbeat", {"dueSoon": 0})
+        yield StreamEvent("heartbeat", {"dueSoon": 0, "collectedAt": "2026-08-30T12:00:00.000Z", "minutesAgo": 1, "classes": 0, "total": 0, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0, "removed": 0, "language": "en", "collecting": False, "schoolToday": None, "scheduleToday": None})
         heartbeat_seen.set()
         await release_update.wait()
         yield StreamEvent("update", BUNDLE_1)

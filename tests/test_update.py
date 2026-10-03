@@ -29,6 +29,9 @@ BASE_STATUS = {
     "announcements": 0,
     "removed": 0,
     "language": "en",
+    "collecting": False,
+    "schoolToday": None,
+    "scheduleToday": None,
 }
 
 

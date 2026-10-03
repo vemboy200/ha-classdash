@@ -112,6 +112,7 @@ async def test_services_are_registered_after_setup(
         "unmute",
         "create_virtual_reminder",
         "edit_virtual_reminder",
+        "delete_virtual_reminder",
     ):
         assert hass.services.has_service(DOMAIN, service)
 
@@ -128,6 +129,54 @@ async def test_hide_service_calls_client_with_single_loaded_entry(
         DOMAIN, "hide", {"id": "abc123"}, blocking=True
     )
     client.async_hide.assert_called_once_with("abc123")
+
+
+async def test_hide_and_unhide_route_reminder_ids_to_the_reminder_endpoints(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """A "v-" id is a virtual reminder, which ClassDash hides through
+    /api/virtual/hide rather than /api/hide."""
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    await _setup(hass, entry, client)
+
+    await hass.services.async_call(DOMAIN, "hide", {"id": "v-1a2b3c4d"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "unhide", {"id": "v-1a2b3c4d"}, blocking=True)
+
+    client.async_hide_virtual.assert_called_once_with("v-1a2b3c4d")
+    client.async_unhide_virtual.assert_called_once_with("v-1a2b3c4d")
+    client.async_hide.assert_not_called()
+    client.async_unhide.assert_not_called()
+
+
+async def test_delete_virtual_reminder(hass: HomeAssistant, sample_certificate) -> None:
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    await _setup(hass, entry, client)
+
+    await hass.services.async_call(
+        DOMAIN, "delete_virtual_reminder", {"id": "v-1a2b3c4d"}, blocking=True
+    )
+    client.async_delete_virtual.assert_called_once_with("v-1a2b3c4d")
+
+
+async def test_delete_virtual_reminder_refuses_an_assignment_id(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """Real assignments can't be deleted, only hidden, so the id is
+    refused before anything reaches ClassDash."""
+    entry = _entry("192.168.1.50:8734", sample_certificate.pem)
+    client = AsyncMock()
+    client.async_stream_updates = _open_stream
+    await _setup(hass, entry, client)
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "delete_virtual_reminder", {"id": "abc123"}, blocking=True
+        )
+    client.async_delete_virtual.assert_not_called()
 
 
 async def test_mute_and_unmute_call_the_right_client_methods(

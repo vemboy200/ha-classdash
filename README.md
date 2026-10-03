@@ -99,7 +99,7 @@ class:
 | Schedule today | Today's A/B or Odd/Even day from ClassDash's Settings → Schedule; unknown when the schedule doesn't rotate or it isn't a school day. Attributes: `schedule_type`, today's `classes` by period, and the `next_school_day` with its label and classes |
 | School calendar | The no-school days, minimum days and events from ClassDash's school calendar, as all-day events. ClassDash only shares the next 14 days, so that's as far ahead as it goes |
 | Classroom / Canvas / Edpuzzle status | `ok`, `problem`, or `unknown` — pipeline health for that platform's last collection attempt, with `at` (when) and `detail` (error message, if any) as attributes. `unknown` covers "never checked yet" and "turned off" (no Canvas address configured, Edpuzzle disabled) alike |
-| To-do list | Every real assignment (due-soon/ahead/overdue/done) and every virtual reminder, combined into one checklist — hidden items excluded, same as the sensors and calendars. Each item's title is suffixed with its class in parentheses, e.g. "Lab report (Physics)"; one with no class stays plain. Checking an item off writes back to ClassDash — but *what* it writes differs by source, since ClassDash's own write API isn't symmetric between the two: a virtual reminder has a real done/undone action (the same one its own "done" button uses), so checking one off there marks it done and un-checking marks it undone. A real assignment has no such action at all — "done" for one of those is purely ClassDash noticing Classroom/Canvas already marked it turned in, never something writable — so checking a real assignment off here hides it instead (the closest real analog available, same action `classdash.hide` already wraps), and un-checking unhides it. Un-checking a real assignment that's genuinely done (not just hidden) is a harmless no-op, since there's nothing to "un-submit." A real assignment ClassDash's own check already found done shows up checked off automatically, no action needed |
+| To-do list | Every real assignment (due-soon/ahead/overdue/done) and every virtual reminder, combined into one checklist — hidden items excluded, same as the sensors and calendars. Each item's title is suffixed with its class in parentheses, e.g. "Lab report (Physics)"; one with no class stays plain. Checking an item off writes back to ClassDash — but *what* it writes differs by source, since ClassDash's own write API isn't symmetric between the two: a virtual reminder has a real done/undone action (the same one its own "done" button uses), so checking one off there marks it done and un-checking marks it undone. A real assignment has no such action at all — "done" for one of those is purely ClassDash noticing Classroom/Canvas already marked it turned in, never something writable — so checking a real assignment off here hides it instead (the closest real analog available, same action `classdash.hide` already wraps), and un-checking unhides it. Un-checking a real assignment that's genuinely done (not just hidden) is a harmless no-op, since there's nothing to "un-submit." A real assignment ClassDash's own check already found done shows up checked off automatically, no action needed. Deleting an item works for virtual reminders only, and deletes it in ClassDash for good; deleting a real assignment is refused, since ClassDash only reads those (check it off to hide it instead) |
 | Reload (button) | Starts the quick collection pass (Classroom + Canvas, ~17s) |
 | Check now (button) | Starts the full collection pass (+ Edpuzzle, ~1 min) |
 | Stop check (button) | Stops the check that's running, the same as ClassDash's own Stop button. Does nothing if no check is running |
@@ -162,35 +162,31 @@ page does:
 
 | Service | What it does |
 |---|---|
-| `classdash.hide` | Dismisses an assignment — hidden ones don't count or show up anywhere in this integration |
+| `classdash.hide` | Dismisses an assignment or a virtual reminder — hidden ones don't count or show up anywhere in this integration |
 | `classdash.unhide` | Reverses `hide` |
 | `classdash.mute` | Marks "not urgent" — still counts, just doesn't badge/notify |
 | `classdash.unmute` | Reverses `mute` |
 
 Each takes an `id` (find it in the assignment's own list attribute on
-any of the Due soon/Overdue/Ahead/Done sensors) and an optional
+any of the Due soon/Overdue/Ahead/Done sensors; a virtual reminder's id starts with `v-`, and hide/unhide send those to ClassDash's reminder endpoints automatically) and an optional
 `config_entry_id`, only needed if more than one ClassDash server is
 configured. These act on an assignment *id*, not an entity — an
 assignment isn't its own HA entity, it's a list item inside a sensor's
 attribute, so there's no natural entity for a hide/mute button to
 attach to.
 
-Two more create and edit virtual reminders — the same thing typing one
-into ClassDash's own Reminders section does:
+Three more create, edit and delete virtual reminders — the same thing doing it in ClassDash's own Reminders section does:
 
 | Service | What it does |
 |---|---|
 | `classdash.create_virtual_reminder` | Adds a reminder — `title` required, `class`/`due` both optional. Returns the created reminder, including its `id` |
 | `classdash.edit_virtual_reminder` | Changes an existing reminder's `title`/`class`/`due`, given its `id` |
+| `classdash.delete_virtual_reminder` | Deletes a reminder for good, given its `id`. This is the one write with no undo; `classdash.hide` keeps it instead. An assignment's id is refused, since ClassDash can't delete those |
 
 `title`/`class`/`due` are always sent together as a full replacement on
 `edit_virtual_reminder`, not merged — leaving `class` or `due` blank
 *clears* it, the same way ClassDash's own edit form always overwrites
-all three rather than diffing against what's there. A reminder's `id`
-is only ever surfaced by `create_virtual_reminder`'s own response (call
-it with "Response variable" set, in a script or automation, to capture
-it) — a reminder isn't its own HA entity, and unlike a real assignment's
-`id`, it doesn't show up in any sensor's attribute list either.
+all three rather than diffing against what's there. A reminder's `id` comes back in `create_virtual_reminder`'s response (call it with "Response variable" set, in a script or automation, to capture it), and also shows up in the Due soon/Overdue/Ahead/Done sensors' list attributes once it lands in one of them.
 
 `class` is a device picker, not free text — it only offers ClassDash's
 own class devices, so a typo can't silently create a permanent phantom
@@ -202,10 +198,7 @@ follows.
 
 ## What's read-only here
 
-Marking a virtual reminder done, hiding one, or deleting one outright —
-as opposed to creating or editing, which the two services above do
-cover — is still ClassDash-side only. Pushing a ClassDash setting from
-Home Assistant (`/api/settings`) isn't built either. Same for
+Pushing a ClassDash setting from Home Assistant (`/api/settings`) isn't built, and neither is linking or unlinking assignments (`/api/link`, `/api/unlink`). Same for
 ClassDash's own `dismissedVersion` on the update check — Home
 Assistant's own "Skip" button is entirely local to Home Assistant and
 doesn't call ClassDash's `/api/update-status/dismiss`, so dismissing

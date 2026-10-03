@@ -50,6 +50,19 @@ unmute:
       selector:
         text:
 
+delete_virtual_reminder:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: classdash
+    id:
+      required: true
+      example: "v-1a2b3c4d"
+      selector:
+        text:
+
 create_virtual_reminder:
   fields:
     config_entry_id:

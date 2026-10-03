@@ -37,26 +37,22 @@ from homeassistant.components.todo import (
     TodoListEntityFeature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .api import ClassDashAuthError, ClassDashConnectionError
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, is_done, is_hidden
+from .coordinator import (
+    ClassDashConfigEntry,
+    ClassDashCoordinator,
+    is_done,
+    is_hidden,
+    is_virtual_id,
+)
 from .devices import main_device_info
 
 PARALLEL_UPDATES = 0
-
-# Matches 24-virtual-assignments.js's own create() ('v-' + 8 random
-# bytes hex) — the only way this integration has to tell a virtual
-# reminder's id apart from a real assignment's (a Classroom/Canvas/
-# Edpuzzle internal id, never in this shape).
-_VIRTUAL_ID_PREFIX = "v-"
-
-
-def _is_virtual_id(item_id: str) -> bool:
-    return item_id.startswith(_VIRTUAL_ID_PREFIX)
 
 
 async def async_setup_entry(
@@ -86,7 +82,10 @@ class ClassDashTodoList(CoordinatorEntity[ClassDashCoordinator], TodoListEntity)
     _attr_has_entity_name = True
     _attr_translation_key = "todo_list"
     _attr_icon = "mdi:checkbox-marked-outline"
-    _attr_supported_features = TodoListEntityFeature.UPDATE_TODO_ITEM
+    _attr_supported_features = (
+        TodoListEntityFeature.UPDATE_TODO_ITEM
+        | TodoListEntityFeature.DELETE_TODO_ITEM
+    )
 
     def __init__(
         self, coordinator: ClassDashCoordinator, entry: ClassDashConfigEntry
@@ -117,7 +116,7 @@ class ClassDashTodoList(CoordinatorEntity[ClassDashCoordinator], TodoListEntity)
         completed = item.status == TodoItemStatus.COMPLETED
         client = self.coordinator.client
         try:
-            if _is_virtual_id(item.uid):
+            if is_virtual_id(item.uid):
                 if completed:
                     await client.async_mark_virtual_done(item.uid)
                 else:
@@ -133,6 +132,28 @@ class ClassDashTodoList(CoordinatorEntity[ClassDashCoordinator], TodoListEntity)
                 await client.async_hide(item.uid)
             else:
                 await client.async_unhide(item.uid)
+        except ClassDashAuthError as err:
+            raise HomeAssistantError("ClassDash rejected the bearer token") from err
+        except ClassDashConnectionError as err:
+            raise HomeAssistantError(
+                f"Could not reach ClassDash's home API: {err}"
+            ) from err
+
+    async def async_delete_todo_items(self, uids: list[str]) -> None:
+        """Delete virtual reminders for good. A real assignment can't be
+        deleted (ClassDash only reads those), so a request that includes
+        one is refused before anything is deleted; checking it off hides
+        it instead."""
+        if real := [uid for uid in uids if not is_virtual_id(uid)]:
+            raise ServiceValidationError(
+                "Only reminders can be deleted; check an assignment off to "
+                f"hide it instead ({len(real)} of the selected items are "
+                "assignments)"
+            )
+        client = self.coordinator.client
+        try:
+            for uid in uids:
+                await client.async_delete_virtual(uid)
         except ClassDashAuthError as err:
             raise HomeAssistantError("ClassDash rejected the bearer token") from err
         except ClassDashConnectionError as err:

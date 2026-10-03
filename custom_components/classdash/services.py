@@ -1,5 +1,6 @@
-"""Custom service actions: hide/unhide/mute/unmute an assignment, plus
-create/edit for virtual reminders.
+"""Custom service actions: hide/unhide/mute/unmute an assignment (hide/
+unhide work on virtual reminders too), plus create/edit/delete for
+virtual reminders.
 
 These act on a specific assignment/reminder by id, not on an entity —
 neither is its own HA entity (an assignment is a list item inside a
@@ -38,7 +39,7 @@ from .api import (
     ClassDashValidationError,
 )
 from .const import DOMAIN
-from .coordinator import ClassDashConfigEntry, ClassDashCoordinator
+from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, is_virtual_id
 from .devices import CLASS_DEVICE_MODEL
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
@@ -78,12 +79,14 @@ _VIRTUAL_FIELDS = {
 CREATE_VIRTUAL_SCHEMA = vol.Schema(_VIRTUAL_FIELDS)
 EDIT_VIRTUAL_SCHEMA = vol.Schema({**_VIRTUAL_FIELDS, vol.Required(ATTR_ID): cv.string})
 
-# Service name -> ClassDashClient method name.
+# Service name -> ClassDashClient method name for a real assignment, and
+# for a virtual reminder (by its "v-" id) where ClassDash has one. Mute
+# has no reminder version in ClassDash, so it's passed through as is.
 _SERVICES = {
-    "hide": "async_hide",
-    "unhide": "async_unhide",
-    "mute": "async_mute",
-    "unmute": "async_unmute",
+    "hide": ("async_hide", "async_hide_virtual"),
+    "unhide": ("async_unhide", "async_unhide_virtual"),
+    "mute": ("async_mute", None),
+    "unmute": ("async_unmute", None),
 }
 
 
@@ -121,9 +124,13 @@ def _resolve_entry(
     return loaded[0]
 
 
-async def _async_handle(call: ServiceCall, method_name: str) -> None:
+async def _async_handle(
+    call: ServiceCall, method_name: str, virtual_method_name: str | None
+) -> None:
     entry = _resolve_entry(call.hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
     coordinator: ClassDashCoordinator = entry.runtime_data
+    if virtual_method_name is not None and is_virtual_id(call.data[ATTR_ID]):
+        method_name = virtual_method_name
     method = getattr(coordinator.client, method_name)
     try:
         await method(call.data[ATTR_ID])
@@ -131,6 +138,14 @@ async def _async_handle(call: ServiceCall, method_name: str) -> None:
         raise HomeAssistantError("ClassDash rejected the bearer token") from err
     except ClassDashConnectionError as err:
         raise HomeAssistantError(f"Could not reach ClassDash's home API: {err}") from err
+
+
+async def _async_delete_virtual(call: ServiceCall) -> None:
+    if not is_virtual_id(call.data[ATTR_ID]):
+        raise ServiceValidationError(
+            "Only virtual reminders can be deleted; use classdash.hide for an assignment"
+        )
+    await _async_handle(call, "async_delete_virtual", None)
 
 
 async def _async_refresh_virtual(coordinator: ClassDashCoordinator) -> None:
@@ -247,13 +262,23 @@ def async_setup_services(hass: HomeAssistant) -> None:
     once per domain for the lifetime of the HA process, regardless of
     how many config entries come and go afterward.
     """
-    for service, method_name in _SERVICES.items():
+    for service, (method_name, virtual_method_name) in _SERVICES.items():
         hass.services.async_register(
             DOMAIN,
             service,
-            functools.partial(_async_handle, method_name=method_name),
+            functools.partial(
+                _async_handle,
+                method_name=method_name,
+                virtual_method_name=virtual_method_name,
+            ),
             schema=SERVICE_SCHEMA,
         )
+    hass.services.async_register(
+        DOMAIN,
+        "delete_virtual_reminder",
+        _async_delete_virtual,
+        schema=SERVICE_SCHEMA,
+    )
 
     hass.services.async_register(
         DOMAIN,
