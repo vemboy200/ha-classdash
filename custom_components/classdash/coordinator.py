@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -280,6 +281,22 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 "timed out waiting for the first update from /api/stream"
             ) from err
 
+    def _push(self, data: ClassDashData) -> None:
+        """Hand a pushed snapshot to the entities, logging a recovery.
+
+        DataUpdateCoordinator logs going unavailable on its own, but
+        async_set_updated_data says nothing on the way back — this is
+        the matching "it's back" line, so a log shows whether the
+        connection ever recovered without a reload.
+        """
+        if not self.last_update_success:
+            _LOGGER.info(
+                "Reconnected to ClassDash at %s:%s",
+                self.config_entry.data[CONF_HOST],
+                self.config_entry.data[CONF_PORT],
+            )
+        self.async_set_updated_data(data)
+
     async def _listen(self) -> None:
         """Reconnect forever, with backoff, until the config entry unloads
         (which cancels this task automatically)."""
@@ -293,7 +310,7 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                         if not self._first_update.done():
                             self._first_update.set_result(data)
                         else:
-                            self.async_set_updated_data(data)
+                            self._push(data)
                     elif event.event == "heartbeat" and self._first_update.done():
                         # A freshness signal, not new assignment/announcement
                         # data (CONTRIBUTING.md is explicit about that) — swap
@@ -314,9 +331,7 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                             if self.data is not None
                             else self._first_update.result()
                         )
-                        self.async_set_updated_data(
-                            dataclasses.replace(base, status=event.data)
-                        )
+                        self._push(dataclasses.replace(base, status=event.data))
                 # The stream ended without an error (server closed it
                 # cleanly) — treat the same as a connection error below:
                 # reconnect after a short wait.

@@ -111,7 +111,7 @@ def _state(hass: HomeAssistant, entity_id: str) -> str | None:
 
 
 async def test_offline_then_back_online_recovers_without_reload(
-    hass: HomeAssistant, cert_factory, socket_enabled
+    hass: HomeAssistant, cert_factory, socket_enabled, caplog
 ) -> None:
     cert = cert_factory()
     server = FakeClassDash(cert, unused_port())
@@ -165,6 +165,7 @@ async def test_offline_then_back_online_recovers_without_reload(
             assert coordinator.last_update_success is True
             assert server.connections == 2
             assert entry.runtime_data is coordinator  # never reloaded
+            assert f"Reconnected to ClassDash at 127.0.0.1:{server.port}" in caplog.text
         finally:
             await hass.config_entries.async_unload(entry.entry_id)
             await hass.async_block_till_done()
