@@ -13,7 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
-from .devices import main_device_info, stale_class_devices
+from .devices import class_device_details, main_device_info, stale_class_devices
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -74,10 +74,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
     # to remove (or worse, disagreeing about) the same device.
 
     @callback
-    def _remove_stale_class_devices() -> None:
+    def _sync_class_devices() -> None:
         if coordinator.data is None:
             return
         current = class_names(coordinator.data)
+        # Device info is only read from an entity when it's added, so a
+        # teacher or link that changes later is kept up to date here.
+        for device in dr.async_entries_for_config_entry(device_reg, entry.entry_id):
+            if device.via_device_id != coordinator.main_device_id or device.name not in current:
+                continue
+            details = class_device_details(coordinator.data, device.name)
+            if device.manufacturer != details["manufacturer"] or device.hw_version != details["hw_version"]:
+                device_reg.async_update_device(device.id, **details)
         for device_id, class_name in stale_class_devices(hass, entry, current):
             device_reg.async_remove_device(device_id)
             # So sensor.py/calendar.py know to re-add this class's
@@ -87,8 +95,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
             coordinator.known_class_sensors.discard(class_name)
             coordinator.known_class_calendars.discard(class_name)
 
-    _remove_stale_class_devices()
-    entry.async_on_unload(coordinator.async_add_listener(_remove_stale_class_devices))
+    _sync_class_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_sync_class_devices))
 
     return True
 

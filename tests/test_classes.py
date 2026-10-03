@@ -207,8 +207,8 @@ async def test_class_with_nothing_due_still_gets_a_device(
     bundle = _bundle(
         due_soon=[_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")],
         classes=[
-            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0},
-            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0},
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas"},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom"},
         ],
     )
 
@@ -255,13 +255,16 @@ async def test_orphaned_class_gets_no_device_even_with_lingering_items(
         due_soon=[_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")],
         overdue=[_assignment("Old Class", "Ancient worksheet", "2020-01-01T00:00:00+00:00", "o1")],
         classes=[
-            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known"},
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas"},
             {
                 "name": "Old Class",
                 "dueSoon": 0,
                 "ahead": 0,
                 "overdue": 1,
                 "status": "orphaned",
+                "teacher": None,
+                "classes": ["Old Class"],
+                "platform": None,
             },
         ],
     )
@@ -571,3 +574,61 @@ async def test_class_entities_come_back_alive_after_a_restart(
     assert calendar_state is not None
     assert sensor_state.state == "1"
     assert calendar_state.state != "unavailable"
+
+
+async def test_class_device_shows_teacher_and_linked(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """The teacher is the manufacturer ("Class by <teacher>") and the
+    platform the hardware version, or "Linked" for a linked class, both
+    kept up to date when a later push changes them."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    def roster(teacher, members):
+        return [
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": teacher, "classes": members, "platform": "Canvas" if len(members) == 1 else ["Canvas", "Google Classroom"]},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom"},
+        ]
+
+    due_soon = [_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")]
+    step = asyncio.Event()
+
+    async def fake_stream():
+        yield StreamEvent("update", _bundle(due_soon=due_soon, classes=roster("Ms. Frizzle", ["Physics"])))
+        await step.wait()
+        yield StreamEvent(
+            "update",
+            _bundle(due_soon=due_soon, classes=roster("Mr. Wizard", ["Physics A", "Physics B"])),
+        )
+        await asyncio.Event().wait()
+
+    dev_reg = dr.async_get(hass)
+
+    def physics() -> dr.DeviceEntry:
+        return _device(dev_reg, entry, class_unique_id(entry, "Physics"))
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert physics().model == "Class"
+        assert physics().manufacturer == "Ms. Frizzle"
+        assert physics().hw_version == "Canvas"
+        # No teacher from the platform: falls back to ClassDash.
+        art = _device(dev_reg, entry, class_unique_id(entry, "Art History"))
+        assert art.manufacturer == "ClassDash"
+        assert art.hw_version == "Google Classroom"
+
+        step.set()
+        async with asyncio.timeout(2):
+            while physics().hw_version == "Canvas":
+                await asyncio.sleep(0)
+        assert physics().manufacturer == "Mr. Wizard"
+        assert physics().hw_version == "Linked"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()

@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import slugify
 
 from .const import DOMAIN
-from .coordinator import ClassDashConfigEntry
+from .coordinator import ClassDashConfigEntry, ClassDashData
 
 
 def main_device_info(entry: ClassDashConfigEntry) -> DeviceInfo:
@@ -37,13 +37,38 @@ def class_unique_id(entry: ClassDashConfigEntry, class_name: str) -> str:
     return f"{entry.unique_id}_class_{slugify(class_name)}"
 
 
+def class_device_details(data: ClassDashData, class_name: str) -> dict[str, str | None]:
+    """The parts of a class device's info that come from ClassDash and can
+    change: the teacher, shown as the manufacturer ("Class by <teacher>"),
+    and the platform it's on as the hardware version, or "Linked" for
+    classes linked in ClassDash's Settings → Classes. A class /api/classes
+    doesn't list (announcements only) or whose platform didn't name a
+    teacher falls back to ClassDash.
+    """
+    roster = next((c for c in data.classes if c["name"] == class_name), None)
+    if roster is None:
+        return {"manufacturer": "ClassDash", "hw_version": None}
+    # `classes` is the real platform classes behind the entry: more than
+    # one only when it's a link. `platform` is a list when the class spans
+    # more than one, which without a link means two platforms happen to
+    # use the same name.
+    platform = roster["platform"]
+    if len(roster["classes"]) > 1:
+        hw_version = "Linked"
+    elif isinstance(platform, list):
+        hw_version = ", ".join(platform)
+    else:
+        hw_version = platform
+    return {"manufacturer": roster["teacher"] or "ClassDash", "hw_version": hw_version}
+
+
 def class_device_info(entry: ClassDashConfigEntry, class_name: str) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, class_unique_id(entry, class_name))},
         via_device_id=entry.runtime_data.main_device_id,
         name=class_name,
-        manufacturer="ClassDash",
         model=CLASS_DEVICE_MODEL,
+        **class_device_details(entry.runtime_data.data, class_name),
     )
 
 

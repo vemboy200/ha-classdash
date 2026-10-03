@@ -120,6 +120,8 @@ roster. That roster only includes a class with nothing currently due if
 with it off, a class still only gets a device once something's actually
 due or announced for it, same as before.
 
+Each class device's info shows its teacher ("Class by <teacher>", or "by ClassDash" when the platform doesn't say) and, as its hardware, the platform it's on (Google Classroom, Canvas or Edpuzzle), or "Linked" for classes linked in ClassDash's Settings → Classes. Both follow ClassDash when they change.
+
 | Entity | What it is |
 |---|---|
 | Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device — including any virtual reminder assigned to this class, bucketed by due date/done state the same way a real assignment already is |
