@@ -82,14 +82,13 @@ rules:
   # Gold
   devices: done
   diagnostics:
-    status: done
-    comment: Built for the user's own personal use, not because it's needed for
-      an eventual core submission — they've said explicitly they know this
-      (and reconfiguration-flow below) would need to come back out first.
-      Narrowly scoped — counts/class-names/connection-state only, not raw
-      assignment content, since this handles a minor's school data and
-      diagnostics dumps end up in public issue reports. Token and pinned cert
-      redacted via async_redact_data.
+    status: exempt
+    comment: The info contained in diagnostics can be sensitive. Device (class)
+      names can contain a teacher's full first and last name, alongside what
+      the class is. Furthermore, since most students are minors, and ClassDash
+      can be used as a parental monitoring tool for their children, this
+      potentially sensitive info could be from children as young as 6 years
+      old (1st grade). Exposing this info to the public is not a good idea.
   discovery:
     status: exempt
     comment: No discovery protocol exists for an arbitrary LAN host:port; ClassDash's

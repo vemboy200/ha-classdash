@@ -203,11 +203,7 @@ there doesn't quiet ClassDash's own update banner.
 
 ## Diagnostics
 
-Settings → Devices & Services → ClassDash → Download diagnostics gets a
-JSON dump for bug reports — counts, class names, and connection state,
-not the content of any assignment or announcement (this handles a
-minor's school data, and diagnostics dumps tend to end up in public issue
-threads). The bearer token and pinned certificate are redacted too.
+There's no "Download diagnostics" on purpose. Class names can include a teacher's full name, and the student is usually a minor, sometimes as young as 6, while diagnostics files tend to get posted publicly in bug reports. For a bug report, Home Assistant's own logs (with ClassDash set to debug) are the way to go, and they're worth reading before posting too.
 
 ## License
 
