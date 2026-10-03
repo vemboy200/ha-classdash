@@ -27,6 +27,8 @@ STATUS = {
     "removed": 0,
     "language": "en",
     "collecting": False,
+    "schoolToday": None,
+    "scheduleToday": None,
 }
 
 

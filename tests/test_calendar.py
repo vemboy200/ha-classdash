@@ -62,6 +62,8 @@ def _data(
         virtual=list(virtual),
         update_status={},
         collection={},
+        calendar={},
+        schedule={},
     )
 
 

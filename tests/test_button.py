@@ -24,6 +24,8 @@ FAKE_BUNDLE = {
     **bundle_extras(),
     "status": {
         "collecting": False,
+        "schoolToday": None,
+        "scheduleToday": None,
         "collectedAt": "2026-08-30T12:00:00.000Z",
         "minutesAgo": 1,
         "classes": 0,

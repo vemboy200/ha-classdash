@@ -1,14 +1,17 @@
-"""Calendar entities for ClassDash — one per class.
+"""Calendar entities for ClassDash — one per class, plus the school calendar.
 
 Each class's due-soon, ahead, and overdue assignments become events on
 that class's own calendar, keyed on the same due date/time ClassDash
 already computed — plus any virtual reminder assigned to that class.
 Announcements have no due date and aren't events.
+
+The school calendar, on the main device, holds the no-school days,
+minimum days and events from ClassDash's Settings → Calendar.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
@@ -24,7 +27,7 @@ from .coordinator import (
     is_done,
     is_hidden,
 )
-from .devices import class_device_info, class_unique_id
+from .devices import class_device_info, class_unique_id, main_device_info
 
 # Same reasoning as sensor.py's PARALLEL_UPDATES: everything here reads
 # from the shared coordinator, nothing makes its own network call.
@@ -42,8 +45,10 @@ async def async_setup_entry(
     entry: ClassDashConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up one calendar per class, added as new classes show up."""
+    """Set up the school calendar, and one calendar per class, added as new
+    classes show up."""
     coordinator = entry.runtime_data
+    async_add_entities([ClassDashSchoolCalendar(coordinator, entry)])
 
     @callback
     def _add_new_class_calendars() -> None:
@@ -169,3 +174,72 @@ class ClassDashClassCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEn
             if event.start_datetime_local < end_date
             and event.end_datetime_local > start_date
         ]
+
+
+# What a day's kind is called when the school calendar gave it no label of
+# its own.
+DAY_KIND_SUMMARIES = {"noSchool": "No school", "minimumDay": "Minimum day"}
+
+
+class ClassDashSchoolCalendar(CoordinatorEntity[ClassDashCoordinator], CalendarEntity):
+    """No-school days, minimum days and events from the school calendar, as
+    all-day events. ClassDash only shares the next 14 days of it."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "school_calendar"
+    _attr_icon = "mdi:calendar-star"
+
+    def __init__(
+        self, coordinator: ClassDashCoordinator, entry: ClassDashConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.unique_id}_school_calendar"
+        self._attr_device_info = main_device_info(entry)
+
+    def _events(self) -> list[CalendarEvent]:
+        # CalendarEntity reads `event` on every state write, even before
+        # the first push, so this has to cope with no data yet.
+        if self.coordinator.data is None:
+            return []
+        calendar = self.coordinator.data.calendar
+        events = [
+            _all_day_event(
+                x["from"], x["to"], x["label"] or DAY_KIND_SUMMARIES[x["kind"]]
+            )
+            for x in calendar["upcoming"]
+        ]
+        events += [
+            _all_day_event(x["from"], x["to"], x["summary"])
+            for x in calendar["events"]
+        ]
+        events.sort(key=lambda e: e.start_datetime_local)
+        return events
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        """The current or next day off, minimum day or event."""
+        now = dt_util.now()
+        for event in self._events():
+            if event.end_datetime_local > now:
+                return event
+        return None
+
+    async def async_get_events(
+        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
+    ) -> list[CalendarEvent]:
+        return [
+            event
+            for event in self._events()
+            if event.start_datetime_local < end_date
+            and event.end_datetime_local > start_date
+        ]
+
+
+def _all_day_event(first: str, last: str, summary: str) -> CalendarEvent:
+    """ClassDash's `to` is the last day itself; an all-day CalendarEvent's
+    end is the day after."""
+    return CalendarEvent(
+        start=date.fromisoformat(first),
+        end=date.fromisoformat(last) + timedelta(days=1),
+        summary=summary,
+    )

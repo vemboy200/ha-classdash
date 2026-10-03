@@ -36,7 +36,8 @@
   },
   "entity": {
     "binary_sensor": {
-      "checking": { "name": "Checking" }
+      "checking": { "name": "Checking" },
+      "school_today": { "name": "School today" }
     },
     "sensor": {
       "due_soon": { "name": "Due soon" },
@@ -47,6 +48,7 @@
       "classes": { "name": "Classes" },
       "last_collected": { "name": "Last collected" },
       "check_progress": { "name": "Check progress" },
+      "schedule_today": { "name": "Schedule today" },
       "check_status_classroom": {
         "name": "Classroom status",
         "state": { "ok": "OK", "fallback": "Fallback", "problem": "Problem", "unknown": "Unknown" }
@@ -61,7 +63,8 @@
       }
     },
     "calendar": {
-      "assignments": { "name": "Assignments" }
+      "assignments": { "name": "Assignments" },
+      "school_calendar": { "name": "School calendar" }
     },
     "button": {
       "reload": { "name": "Reload" },

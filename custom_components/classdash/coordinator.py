@@ -81,6 +81,18 @@ class ClassDashData:
     # status["collecting"] instead: the heartbeat refreshes status every
     # minute, so a check that dies without a last word still clears.
     collection: dict[str, Any]
+    # The school calendar (ClassDash's Settings → Calendar) —
+    # /api/calendar: {"available", "today": {"date", "kind", "label",
+    # "events", "schoolDay"}, "nextSchoolDay", "upcoming": [{"from", "to",
+    # "kind", "label"}], "events": [{"from", "to", "summary"}]}. Dates are
+    # local YYYY-MM-DD, `to` inclusive, and only the next 14 days are
+    # covered. kind is "noSchool"/"minimumDay"/None.
+    calendar: dict[str, Any]
+    # The class schedule (Settings → Schedule) — /api/schedule: {"type":
+    # "none"|"daily"|"ab"|"oddEven", "today", "nextSchoolDay", "headsUps"},
+    # each day {"date", "schoolDay", "day", "label", "flipped",
+    # "classes": [{"class", "period"}]}.
+    schedule: dict[str, Any]
 
 
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
@@ -196,6 +208,8 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         virtual=bundle["virtual"],
         update_status=bundle["update-status"],
         collection=bundle["collection"],
+        calendar=bundle["calendar"],
+        schedule=bundle["schedule"],
     )
 
 

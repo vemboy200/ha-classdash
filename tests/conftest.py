@@ -50,9 +50,20 @@ def default_update_status() -> dict[str, None | bool | str]:
     }
 
 
+def _schedule_day(day: str) -> dict:
+    return {
+        "date": day,
+        "schoolDay": True,
+        "day": None,
+        "flipped": False,
+        "classes": [],
+        "label": None,
+    }
+
+
 def bundle_extras() -> dict:
     """The newer top-level snapshot keys (done/check-status/virtual/
-    update-status/collection) that every bundle fixture needs now that ClassDashData
+    update-status/collection/calendar/schedule) that every bundle fixture needs now that ClassDashData
     requires them — spread into a test's own bundle dict so each one
     doesn't have to repeat this shape by hand."""
     return {
@@ -67,6 +78,26 @@ def bundle_extras() -> dict:
             "total": None,
             "percent": None,
             "updatedAt": None,
+        },
+        # /api/calendar and /api/schedule with neither set up in ClassDash.
+        "calendar": {
+            "available": False,
+            "today": {
+                "date": "2026-09-01",
+                "kind": None,
+                "label": "",
+                "events": [],
+                "schoolDay": True,
+            },
+            "nextSchoolDay": "2026-09-02",
+            "upcoming": [],
+            "events": [],
+        },
+        "schedule": {
+            "type": "none",
+            "today": _schedule_day("2026-09-01"),
+            "nextSchoolDay": _schedule_day("2026-09-02"),
+            "headsUps": [],
         },
     }
 

@@ -33,7 +33,7 @@ from .conftest import bundle_extras
 
 BUNDLE_1 = {
     **bundle_extras(),
-    "status": {"collecting": False, "dueSoon": 1, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
+    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 1, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
     "due-soon": [{"title": "first"}],
     "ahead": [],
     "overdue": [],
@@ -42,7 +42,7 @@ BUNDLE_1 = {
 }
 BUNDLE_2 = {
     **bundle_extras(),
-    "status": {"collecting": False, "dueSoon": 2, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
+    "status": {"collecting": False, "schoolToday": None, "scheduleToday": None, "dueSoon": 2, "overdue": 0, "ahead": 0, "done": 0, "announcements": 0},
     "due-soon": [{"title": "first"}, {"title": "second"}],
     "ahead": [],
     "overdue": [],

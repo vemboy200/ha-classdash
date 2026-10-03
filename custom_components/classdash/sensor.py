@@ -96,6 +96,26 @@ def _announcement_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
     return {"announcements": trimmed}
 
 
+def _schedule_day(day: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "date": day["date"],
+        "label": day["label"],
+        "classes": [
+            {"period": c["period"], "class": c["class"]}
+            for c in sorted(day["classes"], key=lambda c: c["period"])
+        ],
+    }
+
+
+def _schedule_attrs(schedule: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schedule_type": schedule["type"],
+        "classes": _schedule_day(schedule["today"])["classes"],
+        "next_school_day": _schedule_day(schedule["nextSchoolDay"]),
+        "heads_ups": schedule["headsUps"],
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class ClassDashSensorDescription(SensorEntityDescription):
     """Describes one ClassDash sensor."""
@@ -183,6 +203,15 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         }
         if d.status["collecting"]
         else {"done": None, "total": None},
+    ),
+    ClassDashSensorDescription(
+        key="schedule_today",
+        translation_key="schedule_today",
+        icon="mdi:calendar-today",
+        # A/B or Odd/Even, in ClassDash's own language; unknown when the
+        # schedule doesn't rotate or today isn't a school day.
+        value_fn=lambda d: d.status["scheduleToday"],
+        attrs_fn=lambda d: _schedule_attrs(d.schedule),
     ),
     *(
         ClassDashSensorDescription(

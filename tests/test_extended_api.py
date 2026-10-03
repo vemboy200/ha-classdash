@@ -70,6 +70,8 @@ async def test_check_status_sensors_reflect_platform_health(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 0,
@@ -128,6 +130,8 @@ async def test_done_sensor_main_and_per_class(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -173,6 +177,8 @@ async def test_virtual_reminder_appears_on_class_calendar(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -219,6 +225,8 @@ async def test_done_virtual_reminders_tagged_hidden_ones_excluded(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -291,6 +299,8 @@ async def test_virtual_reminder_with_no_class_gets_no_calendar(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 0,
@@ -313,9 +323,14 @@ async def test_virtual_reminder_with_no_class_gets_no_calendar(
     await _setup_with_bundle(hass, sample_certificate, bundle)
     ent_reg = er.async_get(hass)
     # No class name means no class_unique_id to look up — just confirm
-    # nothing unexpected got created by counting calendar entities.
+    # nothing unexpected got created by counting calendar entities. The
+    # school calendar is always there, and isn't a class calendar.
     calendars = [
-        e for e in ent_reg.entities.values() if e.domain == "calendar" and e.platform == DOMAIN
+        e
+        for e in ent_reg.entities.values()
+        if e.domain == "calendar"
+        and e.platform == DOMAIN
+        and e.translation_key != "school_calendar"
     ]
     assert calendars == []
 
@@ -339,6 +354,8 @@ async def test_virtual_reminders_count_toward_due_soon_overdue_ahead_done(
         **bundle_extras(),
         "status": {
             "collecting": False,
+            "schoolToday": None,
+            "scheduleToday": None,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
