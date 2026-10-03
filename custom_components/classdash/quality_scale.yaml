@@ -128,14 +128,19 @@ rules:
   dynamic-devices: done
   entity-category:
     status: done
-    comment: No entity currently warrants a non-default category.
+    comment: Classroom/Canvas/Edpuzzle status, Last collected, Checking, Check
+      progress and App update are diagnostic, since they describe ClassDash
+      itself rather than schoolwork. Everything else keeps the default.
   entity-device-class:
     status: done
-    comment: last_collected uses SensorDeviceClass.TIMESTAMP; the count sensors have
-      no applicable device class.
+    comment: last_collected uses SensorDeviceClass.TIMESTAMP, the check-status
+      sensors ENUM, Checking BinarySensorDeviceClass.RUNNING; the count sensors
+      have no applicable device class.
   entity-disabled-by-default:
     status: done
-    comment: Nothing noisy or niche enough to warrant being disabled by default.
+    comment: Check progress is disabled by default, since it changes many times
+      during every check and few people need it. Checking stays enabled (two
+      changes per check, useful for automations), as does everything else.
   entity-translations: done
   exception-translations:
     status: todo

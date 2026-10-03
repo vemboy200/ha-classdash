@@ -7,6 +7,7 @@ from collections.abc import Callable
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.classdash.api import StreamEvent
 from custom_components.classdash.const import CONF_CERT_PEM, DOMAIN
@@ -51,10 +52,50 @@ def _bundle(collecting: bool, done=None, total=None, percent=None) -> dict:
     }
 
 
+def _entry(hass: HomeAssistant, sample_certificate) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.50:8734",
+        data={
+            "host": "192.168.1.50",
+            "port": 8734,
+            "token": "a" * 64,
+            CONF_CERT_PEM: sample_certificate.pem,
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
 async def _wait_for(check: Callable[[], bool], timeout: float = 2) -> None:
     async with asyncio.timeout(timeout):
         while not check():
             await asyncio.sleep(0)
+
+
+async def test_check_progress_is_disabled_by_default(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    async def stream():
+        yield StreamEvent("update", _bundle(False))
+        await asyncio.Event().wait()
+
+    entry = _entry(hass, sample_certificate)
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        registry_entry = er.async_get(hass).async_get("sensor.classdash_check_progress")
+        assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        assert hass.states.get("sensor.classdash_check_progress") is None
+        # Checking stays on: it's the one an automation would use.
+        assert hass.states.get("binary_sensor.classdash_checking") is not None
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
 
 
 async def test_checking_and_progress_follow_a_check(
@@ -74,17 +115,16 @@ async def test_checking_and_progress_follow_a_check(
         yield StreamEvent("heartbeat", {**STATUS, "collecting": False})
         await asyncio.Event().wait()
 
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        unique_id="192.168.1.50:8734",
-        data={
-            "host": "192.168.1.50",
-            "port": 8734,
-            "token": "a" * 64,
-            CONF_CERT_PEM: sample_certificate.pem,
-        },
+    entry = _entry(hass, sample_certificate)
+    # Check progress is disabled by default; registering it ahead of setup
+    # as enabled is the same as a user having turned it on.
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "192.168.1.50:8734_check_progress",
+        suggested_object_id="classdash_check_progress",
+        config_entry=entry,
     )
-    entry.add_to_hass(hass)
 
     def state(entity_id: str) -> str | None:
         s = hass.states.get(entity_id)

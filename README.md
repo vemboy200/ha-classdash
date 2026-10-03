@@ -94,7 +94,7 @@ class:
 | Classes | Number of classes ClassDash currently tracks |
 | Last collected | Timestamp of ClassDash's last successful collection pass, with `minutes_ago` |
 | Checking | On while ClassDash is checking, whether it was started by its own schedule, its page, or a button here |
-| Check progress | How far the running check has got, in percent, with `done` and `total` as attributes. Unknown while nothing's running |
+| Check progress | How far the running check has got, in percent, with `done` and `total` as attributes. Unknown while nothing's running. Disabled by default, since it changes many times during every check; turn it on from the entity's settings if you want it |
 | School today | On on a school day (minimum days included), by the school calendar in ClassDash's Settings → Calendar; unknown without one. Attributes: `day_kind` (`no_school` / `minimum_day`, or none on a normal day), its `label`, today's `events`, and `next_school_day` |
 | Schedule today | Today's A/B or Odd/Even day from ClassDash's Settings → Schedule; unknown when the schedule doesn't rotate or it isn't a school day. Attributes: `schedule_type`, today's `classes` by period, and the `next_school_day` with its label and classes |
 | School calendar | The no-school days, minimum days and events from ClassDash's school calendar, as all-day events. ClassDash only shares the next 14 days, so that's as far ahead as it goes |

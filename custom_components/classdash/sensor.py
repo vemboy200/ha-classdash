@@ -193,6 +193,10 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
     ClassDashSensorDescription(
         key="check_progress",
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Changes many times during every check (one every ~11 minutes), so
+        # it would fill the recorder fastest of anything here for an
+        # entity few people look at. Off until someone turns it on.
+        entity_registry_enabled_default=False,
         translation_key="check_progress",
         icon="mdi:progress-clock",
         native_unit_of_measurement=PERCENTAGE,
