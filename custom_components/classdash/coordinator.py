@@ -196,7 +196,11 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
     """Holds the /api/stream connection open and pushes each update."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: ClassDashConfigEntry, client: ClassDashClient
+        self,
+        hass: HomeAssistant,
+        entry: ClassDashConfigEntry,
+        client: ClassDashClient,
+        main_device_id: str,
     ) -> None:
         super().__init__(
             hass,
@@ -208,6 +212,10 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
             update_interval=None,
         )
         self.client = client
+        # The main "ClassDash" device's registry id, which every class
+        # device points at with via_device_id. Registered up front in
+        # async_setup_entry, so it exists before any class device does.
+        self.main_device_id = main_device_id
         self._listen_task: asyncio.Task[None] | None = None
         self._first_update: asyncio.Future[ClassDashData] = hass.loop.create_future()
         # Which classes sensor.py/calendar.py have each already added

@@ -188,7 +188,15 @@ async def test_virtual_reminder_appears_on_class_calendar(
         "announcements": [],
         "classes": [],
         "virtual": [
-            _assignment("Physics", "Study for the final", "2026-09-15T00:00:00+00:00", "v1")
+            # Relative, not a fixed date: the calendar's state is its next
+            # event that hasn't ended yet, so a fixed date stops working
+            # once it passes.
+            _assignment(
+                "Physics",
+                "Study for the final",
+                (dt_util.utcnow() + timedelta(days=14)).isoformat(),
+                "v1",
+            )
         ],
     }
     entry = await _setup_with_bundle(hass, sample_certificate, bundle)

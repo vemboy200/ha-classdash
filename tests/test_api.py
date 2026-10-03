@@ -65,9 +65,31 @@ async def _tls_server(cert_pem: str, key_pem: str):
         ) -> None:
             writer.close()
 
-        server = await asyncio.start_server(handle, "127.0.0.1", 0, ssl=server_ctx)
-        async with server:
-            yield server.sockets[0].getsockname()[1]
+        # A client that rejects this server's certificate (the whole point
+        # of the impostor check) hangs up mid-handshake, which asyncio
+        # reports as an unhandled error on the server side. That's expected
+        # here, so drop just that one; anything else still reaches the
+        # handler the hass fixture installed and fails the test as usual.
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+
+        def ignore_rejected_handshake(loop, context) -> None:
+            if isinstance(context.get("exception"), (ConnectionResetError, ssl.SSLError)):
+                return
+            if previous_handler is not None:
+                previous_handler(loop, context)
+            else:
+                loop.default_exception_handler(context)
+
+        loop.set_exception_handler(ignore_rejected_handshake)
+        try:
+            server = await asyncio.start_server(
+                handle, "127.0.0.1", 0, ssl=server_ctx
+            )
+            async with server:
+                yield server.sockets[0].getsockname()[1]
+        finally:
+            loop.set_exception_handler(previous_handler)
 
 
 async def test_fetch_server_certificate_connection_refused(socket_enabled) -> None:

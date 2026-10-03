@@ -40,7 +40,7 @@ def class_unique_id(entry: ClassDashConfigEntry, class_name: str) -> str:
 def class_device_info(entry: ClassDashConfigEntry, class_name: str) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, class_unique_id(entry, class_name))},
-        via_device=(DOMAIN, entry.unique_id),
+        via_device_id=entry.runtime_data.main_device_id,
         name=class_name,
         manufacturer="ClassDash",
         model=CLASS_DEVICE_MODEL,
@@ -64,15 +64,13 @@ def stale_class_devices(
     ClassDashCoordinator.known_class_sensors/known_class_calendars.
     """
     device_reg = dr.async_get(hass)
-    main_device = device_reg.async_get_device(identifiers={(DOMAIN, entry.unique_id)})
-    if main_device is None:
-        return []
+    main_device_id = entry.runtime_data.main_device_id
     current_identifiers = {
         (DOMAIN, class_unique_id(entry, name)) for name in current_names
     }
     return [
         (device.id, device.name)
         for device in dr.async_entries_for_config_entry(device_reg, entry.entry_id)
-        if device.via_device_id == main_device.id
+        if device.via_device_id == main_device_id
         and not (device.identifiers & current_identifiers)
     ]

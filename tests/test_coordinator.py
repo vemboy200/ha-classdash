@@ -70,7 +70,7 @@ def entry(hass: HomeAssistant, sample_certificate) -> MockConfigEntry:
 def _make_coordinator(hass: HomeAssistant, entry: MockConfigEntry, stream_fn):
     client = AsyncMock()
     client.async_stream_updates = stream_fn
-    return ClassDashCoordinator(hass, entry, client)
+    return ClassDashCoordinator(hass, entry, client, "main-device-id")
 
 
 async def test_subsequent_push_updates_coordinator_data(

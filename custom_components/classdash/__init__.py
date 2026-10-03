@@ -13,7 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api import ClassDashClient, build_ssl_context
 from .const import CONF_CERT_PEM
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
-from .devices import stale_class_devices
+from .devices import main_device_info, stale_class_devices
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -49,7 +49,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
         ssl_context,
     )
 
-    coordinator = ClassDashCoordinator(hass, entry, client)
+    device_reg = dr.async_get(hass)
+    main_device = device_reg.async_get_or_create(
+        config_entry_id=entry.entry_id, **main_device_info(entry)
+    )
+    coordinator = ClassDashCoordinator(hass, entry, client, main_device.id)
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
@@ -63,7 +67,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
     # registry-level operation that doesn't belong to either platform
     # specifically, and doing it once here avoids both platforms racing
     # to remove (or worse, disagreeing about) the same device.
-    device_reg = dr.async_get(hass)
 
     @callback
     def _remove_stale_class_devices() -> None:

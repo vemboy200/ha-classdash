@@ -21,6 +21,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from .conftest import bundle_extras
 
 
+def _device(
+    dev_reg: dr.DeviceRegistry, entry: MockConfigEntry, unique_id: str
+) -> dr.DeviceEntry | None:
+    return dev_reg.async_get_device_by_identifier((DOMAIN, unique_id), entry.entry_id)
+
+
 def _assignment(class_name: str, title: str, due: str, item_id: str, tags=()) -> dict:
     return {
         "id": item_id,
@@ -112,19 +118,15 @@ async def test_class_devices_created_with_correct_entities_and_linkage(
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    main_device = dev_reg.async_get_device({(DOMAIN, entry.unique_id)})
+    main_device = _device(dev_reg, entry, entry.unique_id)
     assert main_device is not None
 
-    physics_device = dev_reg.async_get_device(
-        {(DOMAIN, class_unique_id(entry, "Physics"))}
-    )
+    physics_device = _device(dev_reg, entry, class_unique_id(entry, "Physics"))
     assert physics_device is not None
     assert physics_device.via_device_id == main_device.id
     assert physics_device.name == "Physics"
 
-    chem_device = dev_reg.async_get_device(
-        {(DOMAIN, class_unique_id(entry, "AP Chem, Period 2!"))}
-    )
+    chem_device = _device(dev_reg, entry, class_unique_id(entry, "AP Chem, Period 2!"))
     assert chem_device is not None
     assert chem_device.via_device_id == main_device.id
 
@@ -221,9 +223,7 @@ async def test_class_with_nothing_due_still_gets_a_device(
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    art_device = dev_reg.async_get_device(
-        {(DOMAIN, class_unique_id(entry, "Art History"))}
-    )
+    art_device = _device(dev_reg, entry, class_unique_id(entry, "Art History"))
     assert art_device is not None
 
     entity_id = ent_reg.async_get_entity_id(
@@ -276,7 +276,7 @@ async def test_orphaned_class_gets_no_device_even_with_lingering_items(
 
     dev_reg = dr.async_get(hass)
     assert (
-        dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Old Class"))})
+        _device(dev_reg, entry, class_unique_id(entry, "Old Class"))
         is None
     )
 
@@ -388,7 +388,7 @@ async def test_class_device_removed_when_class_disappears(
 
         dev_reg = dr.async_get(hass)
         assert (
-            dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+            _device(dev_reg, entry, class_unique_id(entry, "Physics"))
             is not None
         )
 
@@ -400,7 +400,7 @@ async def test_class_device_removed_when_class_disappears(
     ent_reg = er.async_get(hass)
 
     assert (
-        dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+        _device(dev_reg, entry, class_unique_id(entry, "Physics"))
         is None
     )
     assert (
@@ -416,7 +416,7 @@ async def test_class_device_removed_when_class_disappears(
         is None
     )
     # The main device must never be swept up in this.
-    assert dev_reg.async_get_device({(DOMAIN, entry.unique_id)}) is not None
+    assert _device(dev_reg, entry, entry.unique_id) is not None
 
 
 async def test_class_device_recreated_after_disappearing_and_reappearing(
@@ -478,7 +478,7 @@ async def test_class_device_recreated_after_disappearing_and_reappearing(
 
         dev_reg = dr.async_get(hass)
         assert (
-            dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+            _device(dev_reg, entry, class_unique_id(entry, "Physics"))
             is not None
         )
 
@@ -487,7 +487,7 @@ async def test_class_device_recreated_after_disappearing_and_reappearing(
         await hass.async_block_till_done()
 
         assert (
-            dev_reg.async_get_device({(DOMAIN, class_unique_id(entry, "Physics"))})
+            _device(dev_reg, entry, class_unique_id(entry, "Physics"))
             is None
         )
 

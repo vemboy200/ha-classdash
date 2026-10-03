@@ -9,19 +9,24 @@ to be involved in.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from custom_components.classdash.calendar import ClassDashClassCalendar
 from custom_components.classdash.coordinator import ClassDashData
 
 
+class _FakeCoordinator:
+    main_device_id = "main-device-id"
+
+    def __init__(self, data: ClassDashData) -> None:
+        self.data = data
+
+
 class _FakeEntry:
     unique_id = "192.168.1.50:8734"
 
-
-class _FakeCoordinator:
-    def __init__(self, data: ClassDashData) -> None:
-        self.data = data
+    def __init__(self, coordinator: _FakeCoordinator) -> None:
+        self.runtime_data = coordinator
 
 
 def _assignment(
@@ -38,7 +43,8 @@ def _assignment(
 
 
 def _calendar(data: ClassDashData) -> ClassDashClassCalendar:
-    return ClassDashClassCalendar(_FakeCoordinator(data), _FakeEntry(), "Physics")
+    coordinator = _FakeCoordinator(data)
+    return ClassDashClassCalendar(coordinator, _FakeEntry(coordinator), "Physics")
 
 
 def _data(
@@ -59,10 +65,16 @@ def _data(
 
 
 def test_event_is_the_soonest_not_yet_ended() -> None:
+    # Relative to now: `event` reads the real clock, so fixed dates
+    # stop working once they pass.
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(days=3)).isoformat()
+    ahead = (now + timedelta(days=10)).isoformat()
+    past = (now - timedelta(days=30)).isoformat()
     data = _data(
-        due_soon=[_assignment("Lab report", "2026-09-20T23:59:00+00:00", item_id="soon")],
-        ahead=[_assignment("Final project", "2026-10-01T23:59:00+00:00", item_id="ahead")],
-        overdue=[_assignment("Old worksheet", "2026-08-01T23:59:00+00:00", item_id="overdue")],
+        due_soon=[_assignment("Lab report", soon, item_id="soon")],
+        ahead=[_assignment("Final project", ahead, item_id="ahead")],
+        overdue=[_assignment("Old worksheet", past, item_id="overdue")],
     )
     event = _calendar(data).event
     assert event is not None
