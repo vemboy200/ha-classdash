@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -181,6 +181,7 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
     ),
     ClassDashSensorDescription(
         key="last_collected",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="last_collected",
         icon="mdi:clock-check-outline",
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -191,6 +192,7 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
     ),
     ClassDashSensorDescription(
         key="check_progress",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="check_progress",
         icon="mdi:progress-clock",
         native_unit_of_measurement=PERCENTAGE,
@@ -216,6 +218,7 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
     *(
         ClassDashSensorDescription(
             key=f"check_status_{platform}",
+            entity_category=EntityCategory.DIAGNOSTIC,
             translation_key=f"check_status_{platform}",
             device_class=SensorDeviceClass.ENUM,
             options=["ok", "fallback", "problem", "unknown"],
