@@ -96,8 +96,8 @@ async def test_setup_and_unload_entry(
 async def test_setup_entry_triggers_reauth_on_bad_token(
     hass: HomeAssistant, sample_certificate
 ) -> None:
-    """A bad/expired token on the *very first* connection should fail setup
-    in a way Home Assistant recognizes as needing reauth."""
+    """A bad/expired token on the very first connection starts reauth.
+    Setup itself succeeds, since it no longer waits for ClassDash."""
     entry = _make_entry(sample_certificate)
     entry.add_to_hass(hass)
 
@@ -110,9 +110,48 @@ async def test_setup_entry_triggers_reauth_on_bad_token(
     ) as mock_client_cls:
         mock_client_cls.return_value.async_stream_updates = failing_stream
 
-        assert not await hass.config_entries.async_setup(entry.entry_id)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-    assert entry.state is ConfigEntryState.SETUP_ERROR
-    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
-    assert any(flow["context"].get("source") == "reauth" for flow in flows)
+        async with asyncio.timeout(2):
+            while not any(
+                flow["context"].get("source") == "reauth"
+                for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+            ):
+                await asyncio.sleep(0)
+
+
+async def test_setup_succeeds_while_classdash_is_offline(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """ClassDash being off when Home Assistant starts (a shut-down laptop)
+    doesn't block setup: the entry loads, entities are unavailable, and
+    they fill in once ClassDash answers."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+    online = asyncio.Event()
+
+    async def stream():
+        await online.wait()
+        yield StreamEvent("update", FAKE_BUNDLE)
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = stream
+
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        assert hass.states.get("sensor.classdash_due_soon").state == "unavailable"
+        assert hass.states.get("todo.classdash_to_do_list").state == "unavailable"
+
+        online.set()
+        async with asyncio.timeout(2):
+            while hass.states.get("sensor.classdash_due_soon").state != "2":
+                await asyncio.sleep(0)
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()

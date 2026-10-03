@@ -21,6 +21,3 @@ STREAM_RECONNECT_MAX_SECONDS = 60
 # stay <= STREAM_RECONNECT_MAX_SECONDS, or it's never reached) —
 # a single missed reconnect shouldn't flash the whole device unavailable.
 STREAM_UNAVAILABLE_THRESHOLD_SECONDS = 60
-# How long the first connection gets before first refresh gives up and
-# lets Home Assistant retry setup later.
-STREAM_FIRST_CONNECT_TIMEOUT = 15

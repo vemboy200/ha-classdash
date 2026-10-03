@@ -144,7 +144,7 @@ async def test_offline_then_back_online_recovers_without_reload(
             assert await hass.config_entries.async_setup(entry.entry_id)
             await hass.async_block_till_done()
             assert entry.state is ConfigEntryState.LOADED
-            assert _state(hass, "sensor.classdash_due_soon") == "1"
+            await _wait_for(lambda: _state(hass, "sensor.classdash_due_soon") == "1")
             assert server.connections == 1
 
             # 2. ClassDash goes offline: HA should mark it unavailable.

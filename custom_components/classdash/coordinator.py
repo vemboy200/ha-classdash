@@ -19,15 +19,13 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import ClassDashAuthError, ClassDashClient, ClassDashConnectionError
 from .const import (
     DOMAIN,
-    STREAM_FIRST_CONNECT_TIMEOUT,
     STREAM_RECONNECT_MAX_SECONDS,
     STREAM_RECONNECT_MIN_SECONDS,
     STREAM_UNAVAILABLE_THRESHOLD_SECONDS,
@@ -208,8 +206,8 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
             _LOGGER,
             name=DOMAIN,
             config_entry=entry,
-            # No update_interval: this coordinator is push-driven. See
-            # _async_update_data for the one-time exception during setup.
+            # No update_interval: this coordinator is push-driven, by the
+            # listener async_start launches.
             update_interval=None,
         )
         self.client = client
@@ -217,8 +215,13 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         # device points at with via_device_id. Registered up front in
         # async_setup_entry, so it exists before any class device does.
         self.main_device_id = main_device_id
-        self._listen_task: asyncio.Task[None] | None = None
-        self._first_update: asyncio.Future[ClassDashData] = hass.loop.create_future()
+        # Setup doesn't wait for ClassDash (it's often on a laptop that's
+        # asleep, shut down, or off this network), so there's no data
+        # until the first push. Starting out "failed" keeps every entity
+        # unavailable until then, the same as an outage later on.
+        self.last_update_success = False
+        self._connected = False
+        self._logged_unreachable = False
         # Which classes sensor.py/calendar.py have each already added
         # entities for, *this process*. Deliberately not derived from the
         # entity/device registry — those persist across a restart on
@@ -234,52 +237,24 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         self.known_class_sensors: set[str] = set()
         self.known_class_calendars: set[str] = set()
 
-    async def _async_update_data(self) -> ClassDashData:
-        """Called exactly once, by async_config_entry_first_refresh.
+    @callback
+    def async_start(self) -> asyncio.Task[None]:
+        """Start the /api/stream listener. It runs until the config entry
+        unloads, which cancels it."""
+        return self.config_entry.async_create_background_task(
+            self.hass, self._listen(), name=f"{DOMAIN}_stream"
+        )
 
-        Starts the persistent listener and waits for its first push rather
-        than doing a one-off poll — /api/stream sends the current snapshot
-        immediately on connect, so this is the real data, not a
-        placeholder.
+    async def _async_update_data(self) -> ClassDashData:
+        """Only reached by a manual refresh (homeassistant.update_entity).
+
+        Data arrives by push, so there's nothing to fetch: hand back what
+        the stream last sent while it's connected, and fail while it
+        isn't, so a manual refresh can't make stale data look current.
         """
-        if self._listen_task is None:
-            self._listen_task = self.config_entry.async_create_background_task(
-                self.hass, self._listen(), name=f"{DOMAIN}_stream"
-            )
-        try:
-            await asyncio.wait_for(
-                asyncio.shield(self._first_update), timeout=STREAM_FIRST_CONNECT_TIMEOUT
-            )
-            # Deliberately not returning _first_update's own result: a fast
-            # reconnect can let the listener push a *second* event (via
-            # async_set_updated_data, straight onto self.data) before this
-            # coroutine is even rescheduled after the future resolved —
-            # `Future.set_result` only schedules its waiters, it doesn't
-            # run them immediately. Returning the frozen first-event value
-            # in that case would have DataUpdateCoordinator's own
-            # `self.data = await self._async_update_data()` clobber the
-            # newer data the listener already stored. Reading self.data
-            # live sidesteps the race instead of relying on it being rare.
-            return self.data if self.data is not None else self._first_update.result()
-        except ClassDashAuthError as err:
-            # The listen task already saw this and returned on its own —
-            # nothing left running to clean up.
-            raise ConfigEntryAuthFailed("bearer token rejected") from err
-        except ClassDashConnectionError as err:
-            # Same here: the listen task set this and returned.
-            raise UpdateFailed(str(err)) from err
-        except TimeoutError as err:
-            # Unlike the two cases above, the listen task is still alive
-            # here — the wait_for gave up, not the connection attempt
-            # itself. Shielding kept it from being cancelled out from under
-            # the task, but that means it's now orphaned unless cancelled
-            # explicitly: HA doesn't unload a config entry that never
-            # finished setting up, so nothing else would ever stop it.
-            if self._listen_task is not None:
-                self._listen_task.cancel()
-            raise UpdateFailed(
-                "timed out waiting for the first update from /api/stream"
-            ) from err
+        if not self._connected or self.data is None:
+            raise UpdateFailed("not connected to ClassDash")
+        return self.data
 
     def _push(self, data: ClassDashData) -> None:
         """Hand a pushed snapshot to the entities, logging a recovery.
@@ -289,13 +264,35 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         the matching "it's back" line, so a log shows whether the
         connection ever recovered without a reload.
         """
-        if not self.last_update_success:
+        if not self.last_update_success and (
+            self.data is not None or self._logged_unreachable
+        ):
             _LOGGER.info(
                 "Reconnected to ClassDash at %s:%s",
                 self.config_entry.data[CONF_HOST],
                 self.config_entry.data[CONF_PORT],
             )
         self.async_set_updated_data(data)
+
+    def _connection_lost(self, err: Exception, backoff: float) -> None:
+        """Mark the entities unavailable once retries have gone on long
+        enough — a single missed reconnect shouldn't flash them."""
+        self._connected = False
+        if self.data is None:
+            # Never connected since setup: entities are already
+            # unavailable, and DataUpdateCoordinator only logs the
+            # available→unavailable change, so say so here, once.
+            if not self._logged_unreachable:
+                _LOGGER.info(
+                    "ClassDash at %s:%s isn't reachable yet, will keep trying: %s",
+                    self.config_entry.data[CONF_HOST],
+                    self.config_entry.data[CONF_PORT],
+                    err,
+                )
+                self._logged_unreachable = True
+            return
+        if backoff >= STREAM_UNAVAILABLE_THRESHOLD_SECONDS:
+            self.async_set_update_error(err)
 
     async def _listen(self) -> None:
         """Reconnect forever, with backoff, until the config entry unloads
@@ -306,56 +303,34 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 async for event in self.client.async_stream_updates():
                     backoff = STREAM_RECONNECT_MIN_SECONDS
                     if event.event == "update":
-                        data = _parse_snapshot(event.data)
-                        if not self._first_update.done():
-                            self._first_update.set_result(data)
-                        else:
-                            self._push(data)
-                    elif event.event == "heartbeat" and self._first_update.done():
+                        self._connected = True
+                        self._push(_parse_snapshot(event.data))
+                    elif event.event == "heartbeat" and self.data is not None:
                         # A freshness signal, not new assignment/announcement
                         # data (CONTRIBUTING.md is explicit about that) — swap
                         # in just the refreshed status (collectedAt/minutesAgo
                         # tick even when nothing else has), keep the existing
-                        # lists untouched. Guarding on _first_update.done()
-                        # rather than `self.data is not None`: self.data is
-                        # only set by DataUpdateCoordinator's own assignment
-                        # in _async_refresh, which — same race as
-                        # _async_update_data's own comment above — may not
-                        # have run yet even though _first_update itself
-                        # already has a result (set_result() marks a future
-                        # done immediately; it only *schedules* waiters,
-                        # doesn't run them). Reading self.data with the same
-                        # fallback as _async_update_data sidesteps that.
-                        base = (
-                            self.data
-                            if self.data is not None
-                            else self._first_update.result()
-                        )
-                        self._push(dataclasses.replace(base, status=event.data))
+                        # lists untouched. Ignored before the first "update",
+                        # which ClassDash always sends first on connect anyway.
+                        self._push(dataclasses.replace(self.data, status=event.data))
                 # The stream ended without an error (server closed it
                 # cleanly) — treat the same as a connection error below:
                 # reconnect after a short wait.
                 raise ClassDashConnectionError("stream closed")
-            except ClassDashAuthError as err:
-                if not self._first_update.done():
-                    self._first_update.set_exception(err)
-                    return
-                # A token rolled out from under an already-running stream.
-                # Reauth reloads the entry, which replaces this coordinator
-                # (and cancels this task) entirely — nothing left to do here.
+            except ClassDashAuthError:
+                # The token was rolled, at setup or later. Reauth reloads
+                # the entry, which replaces this coordinator (and cancels
+                # this task) entirely — nothing left to do here.
+                self._connected = False
                 self.config_entry.async_start_reauth(self.hass)
                 return
             except ClassDashConnectionError as err:
-                if not self._first_update.done():
-                    self._first_update.set_exception(err)
-                    return
                 _LOGGER.debug(
                     "classdash stream disconnected, retrying in %ss: %s",
                     backoff,
                     err,
                 )
-                if backoff >= STREAM_UNAVAILABLE_THRESHOLD_SECONDS:
-                    self.async_set_update_error(err)
+                self._connection_lost(err, backoff)
             except Exception as err:  # noqa: BLE001
                 # Anything else — a malformed/unexpected event shape, a bug
                 # in this code's own parsing — must not be allowed to
@@ -368,14 +343,10 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 # level ClassDashConnectionError gets) since this
                 # represents a real bug or an unexpected server change,
                 # not an ordinary network hiccup.
-                if not self._first_update.done():
-                    self._first_update.set_exception(err)
-                    return
                 _LOGGER.exception(
                     "classdash stream: unexpected error, retrying in %ss", backoff
                 )
-                if backoff >= STREAM_UNAVAILABLE_THRESHOLD_SECONDS:
-                    self.async_set_update_error(err)
+                self._connection_lost(err, backoff)
 
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, STREAM_RECONNECT_MAX_SECONDS)

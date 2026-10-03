@@ -98,6 +98,9 @@ class ClassDashTodoList(CoordinatorEntity[ClassDashCoordinator], TodoListEntity)
     @property
     def todo_items(self) -> list[TodoItem]:
         data = self.coordinator.data
+        if data is None:
+            # Not connected to ClassDash yet since setup.
+            return []
         items = [
             _to_todo_item(x, done=(key == "done"))
             for key in ("due_soon", "ahead", "overdue", "done")

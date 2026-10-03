@@ -54,10 +54,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
         config_entry_id=entry.entry_id, **main_device_info(entry)
     )
     coordinator = ClassDashCoordinator(hass, entry, client, main_device.id)
-    await coordinator.async_config_entry_first_refresh()
-
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Not waiting for ClassDash here: it often runs on a laptop that's
+    # asleep, shut down, or off this network, and that shouldn't hold up
+    # setup or leave the entry stuck retrying. Entities start out
+    # unavailable and fill in on the first push, like after any outage.
+    coordinator.async_start()
 
     # Classes change over time — a class that goes orphaned, stale, or
     # excluded in ClassDash itself should stop having a device here too,

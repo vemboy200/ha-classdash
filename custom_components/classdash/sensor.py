@@ -275,7 +275,9 @@ class ClassDashSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
 
     @property
     def icon(self) -> str | None:
-        if self.entity_description.icon_fn is None:
+        # Read even while unavailable, unlike native_value/attributes, so
+        # it has to cope with no data yet.
+        if self.entity_description.icon_fn is None or self.coordinator.data is None:
             return self.entity_description.icon
         return self.entity_description.icon_fn(self.coordinator.data)
 

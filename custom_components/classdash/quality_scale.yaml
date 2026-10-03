@@ -50,7 +50,14 @@ rules:
   has-entity-name: done
   runtime-data: done
   test-before-configure: done
-  test-before-setup: done
+  test-before-setup:
+    status: exempt
+    comment: ClassDash can be run on a laptop that isn't always on the local
+      network, or a computer that gets shut down and booted up, causing
+      reliability/uptime problems. Instead, the integration should
+      periodically check whether the computer is online and use entity
+      unavailability if it isn't. This is similar to how ESPHome handles
+      sleepy devices.
   unique-config-entry: done
 
   # Silver

@@ -75,9 +75,11 @@ regardless (just a status refresh, so "Last collected"'s `minutes_ago`
 keeps ticking even during a long quiet stretch) — that heartbeat also
 means a truly dead connection is noticed within about 90 seconds instead
 of hanging indefinitely. If the connection drops, it's retried with
-backoff (5s up to 5 minutes); a brief blip doesn't touch the entities,
+backoff (5s up to 1 minute); a brief blip doesn't touch the entities,
 but a longer outage marks them unavailable rather than silently going
 stale forever.
+
+ClassDash doesn't need to be running when Home Assistant starts (it's often on a laptop that's shut down, asleep, or away from home). The integration still loads, its entities show as unavailable, and they fill in as soon as ClassDash answers, the same way they come back after any outage. No reload needed.
 
 **One main device ("ClassDash")** with everything not tied to a specific
 class:
