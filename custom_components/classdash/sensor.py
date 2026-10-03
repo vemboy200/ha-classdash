@@ -51,6 +51,16 @@ def _assignment_attrs(items: list[dict[str, Any]]) -> dict[str, Any]:
             "class": x.get("class"),
             "due": x.get("due"),
             "link": x.get("link"),
+            # Not on virtual reminders, hence .get. Linked is just the
+            # progress: each part's own id/title/link would make for a
+            # large attribute, recorded on every change.
+            "teacher": x.get("teacher"),
+            "locked": x.get("locked"),
+            "linked": (
+                {"done": linked["done"], "total": linked["total"]}
+                if (linked := x.get("linked"))
+                else None
+            ),
         }
         for x in visible[:MAX_LIST_ATTRIBUTES]
     ]

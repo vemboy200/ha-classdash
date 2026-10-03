@@ -159,6 +159,44 @@ def is_virtual_id(item_id: str) -> bool:
     return item_id.startswith(VIRTUAL_ID_PREFIX)
 
 
+def _when(iso: str) -> str:
+    at = dt_util.as_local(dt_util.parse_datetime(iso))
+    return f"{at:%b} {at.day}, {at:%H:%M}"
+
+
+def _locked_line(locked: dict[str, Any]) -> str:
+    """ClassDash's `locked` (Canvas work that can't be done yet, or any
+    more) as one line. `at` is only there for opens/closed, and `module`
+    only for module."""
+    why = locked["why"]
+    if why == "opens" and locked["at"]:
+        return f"Locked until {_when(locked['at'])}"
+    if why == "module":
+        module = locked["module"]
+        return f"Locked until {module} is done" if module else "Locked until a module is done"
+    if why == "closed" and locked["at"]:
+        return f"Closed {_when(locked['at'])}"
+    return "Locked"
+
+
+def assignment_details(item: dict[str, Any]) -> str:
+    """The details of an assignment worth reading with it, one per line,
+    for to-do item and calendar event descriptions: teacher, whether it's
+    locked, a linked assignment's progress, and the link. Virtual
+    reminders have none of these but the link (always null for them), so
+    each is read with .get."""
+    lines = []
+    if teacher := item.get("teacher"):
+        lines.append(f"Teacher: {teacher}")
+    if locked := item.get("locked"):
+        lines.append(_locked_line(locked))
+    if linked := item.get("linked"):
+        lines.append(f"Linked: {linked['done']} of {linked['total']} parts done")
+    if link := item.get("link"):
+        lines.append(link)
+    return "\n".join(lines)
+
+
 def is_done(item: dict[str, Any]) -> bool:
     """Turned in / marked done. Used to keep completed virtual reminders
     off a class's calendar — /api/virtual mixes every state into one

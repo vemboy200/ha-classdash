@@ -632,3 +632,55 @@ async def test_class_device_shows_teacher_and_linked(
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_assignment_details_in_attributes_and_calendar(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+    due = (dt_util.now() + timedelta(days=2)).isoformat()
+    item = {
+        **_assignment("Physics", "Lab report", due, "p1"),
+        "teacher": "Ms. Frizzle",
+        "locked": None,
+        "linked": {
+            "done": 1,
+            "total": 2,
+            "parts": [
+                {"id": "p1", "title": "Lab report", "platform": "Canvas", "link": None, "done": True, "removed": False},
+                {"id": "e1", "title": "Lab report", "platform": "Edpuzzle", "link": None, "done": False, "removed": False},
+            ],
+        },
+    }
+
+    async def fake_stream():
+        yield StreamEvent("update", _bundle(due_soon=[item]))
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        ent_reg = er.async_get(hass)
+        sensor_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{class_unique_id(entry, 'Physics')}_due_soon"
+        )
+        attrs = hass.states.get(sensor_id).attributes["assignments"][0]
+        assert attrs["teacher"] == "Ms. Frizzle"
+        assert attrs["locked"] is None
+        # Progress only, not every part.
+        assert attrs["linked"] == {"done": 1, "total": 2}
+
+        calendar_id = ent_reg.async_get_entity_id(
+            "calendar", DOMAIN, f"{class_unique_id(entry, 'Physics')}_calendar"
+        )
+        assert hass.states.get(calendar_id).attributes["description"] == (
+            "Teacher: Ms. Frizzle\nLinked: 1 of 2 parts done"
+        )
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()

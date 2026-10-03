@@ -46,6 +46,7 @@ from .api import ClassDashAuthError, ClassDashConnectionError
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
+    assignment_details,
     is_done,
     is_hidden,
     is_virtual_id,
@@ -73,6 +74,7 @@ def _to_todo_item(item: dict[str, Any], *, done: bool) -> TodoItem:
         summary=summary,
         status=TodoItemStatus.COMPLETED if done else TodoItemStatus.NEEDS_ACTION,
         due=due,
+        description=assignment_details(item) or None,
     )
 
 

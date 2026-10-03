@@ -414,3 +414,32 @@ async def test_deleting_an_assignment_is_refused_and_deletes_nothing(
             )
 
         mock_client_cls.return_value.async_delete_virtual.assert_not_called()
+
+
+async def test_todo_item_description_has_the_details(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    bundle = _bundle(
+        ahead=[
+            {
+                **_assignment("Physics", "Lab report", "2026-12-20T00:00:00+00:00", "p1"),
+                "teacher": "Ms. Frizzle",
+                "locked": {"why": "module", "at": None, "module": "Unit 3"},
+                "linked": None,
+                "link": "https://canvas.example/1",
+            }
+        ],
+        virtual=[_assignment(None, "Study", None, "v-aaa11111")],
+    )
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        await _setup_with_bundle(hass, sample_certificate, mock_client_cls, bundle)
+        entity = hass.data["entity_components"]["todo"].get_entity(_entity_id(hass))
+        items = {item.uid: item for item in entity.todo_items}
+
+    assert items["p1"].description == (
+        "Teacher: Ms. Frizzle\nLocked until Unit 3 is done\nhttps://canvas.example/1"
+    )
+    # Nothing to add: no description, rather than an empty one.
+    assert items["v-aaa11111"].description is None

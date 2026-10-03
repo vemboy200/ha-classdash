@@ -23,6 +23,7 @@ from homeassistant.util import dt as dt_util
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
+    assignment_details,
     class_names,
     is_done,
     is_hidden,
@@ -80,7 +81,7 @@ def _assignment_to_event(item: dict[str, Any], tag: str | None = None) -> Calend
         start=due,
         end=due + EVENT_DURATION,
         summary=f"{title} ({tag})" if tag else title,
-        description=item.get("link") or "",
+        description=assignment_details(item),
         uid=item.get("id"),
     )
 
