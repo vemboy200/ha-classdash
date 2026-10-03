@@ -23,6 +23,7 @@ is tracked in
 - ClassDash's home API running and reachable (`npm run api`, or the
   settings-panel toggle), with the bearer token and certificate fingerprint
   it prints on startup handy
+- ClassDash v2.4.0 or newer (an older one is missing data this integration reads, and its entities stay unavailable)
 - Home Assistant 2026.8 or newer
 
 ## Install
