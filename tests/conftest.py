@@ -52,7 +52,7 @@ def default_update_status() -> dict[str, None | bool | str]:
 
 def bundle_extras() -> dict:
     """The newer top-level snapshot keys (done/check-status/virtual/
-    update-status) that every bundle fixture needs now that ClassDashData
+    update-status/collection) that every bundle fixture needs now that ClassDashData
     requires them — spread into a test's own bundle dict so each one
     doesn't have to repeat this shape by hand."""
     return {
@@ -60,6 +60,14 @@ def bundle_extras() -> dict:
         "check-status": unknown_check_status(),
         "virtual": [],
         "update-status": default_update_status(),
+        # /api/collection with nothing running.
+        "collection": {
+            "running": False,
+            "done": None,
+            "total": None,
+            "percent": None,
+            "updatedAt": None,
+        },
     }
 
 

@@ -74,6 +74,13 @@ class ClassDashData:
     # it directly the way an earlier, interactive version of that entity
     # used to.
     update_status: dict[str, Any]
+    # The check that's running right now — /api/collection: {"running",
+    # "done", "total", "percent", "updatedAt"}, with done/total/percent
+    # None while nothing runs. Pushed as it moves (ClassDash watches its
+    # live/ folder). For whether a check is running at all, read
+    # status["collecting"] instead: the heartbeat refreshes status every
+    # minute, so a check that dies without a last word still clears.
+    collection: dict[str, Any]
 
 
 type ClassDashConfigEntry = ConfigEntry[ClassDashCoordinator]
@@ -188,6 +195,7 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         check_status=bundle["check-status"],
         virtual=bundle["virtual"],
         update_status=bundle["update-status"],
+        collection=bundle["collection"],
     )
 
 

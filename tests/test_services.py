@@ -26,6 +26,7 @@ from .conftest import bundle_extras
 FAKE_BUNDLE = {
     **bundle_extras(),
     "status": {
+        "collecting": False,
         "collectedAt": "2026-09-01T00:00:00.000Z",
         "minutesAgo": 1,
         "classes": 0,

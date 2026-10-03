@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -167,6 +168,21 @@ SENSOR_DESCRIPTIONS: tuple[ClassDashSensorDescription, ...] = (
         if d.status["collectedAt"]
         else None,
         attrs_fn=lambda d: {"minutes_ago": d.status["minutesAgo"]},
+    ),
+    ClassDashSensorDescription(
+        key="check_progress",
+        translation_key="check_progress",
+        icon="mdi:progress-clock",
+        native_unit_of_measurement=PERCENTAGE,
+        # Only while a check runs; unknown the rest of the time, the same
+        # as ClassDash's own /api/collection.
+        value_fn=lambda d: d.collection["percent"] if d.status["collecting"] else None,
+        attrs_fn=lambda d: {
+            "done": d.collection["done"],
+            "total": d.collection["total"],
+        }
+        if d.status["collecting"]
+        else {"done": None, "total": None},
     ),
     *(
         ClassDashSensorDescription(

@@ -218,6 +218,12 @@ class ClassDashClient:
         fire-and-forget shape as async_reload."""
         await self._post("/api/check")
 
+    async def async_stop(self) -> None:
+        """End whichever check is running — the same Stop as ClassDash's own
+        page. Answers right away, whether or not anything was running;
+        status["collecting"] going false is how a caller sees it end."""
+        await self._post("/api/stop")
+
     async def async_hide(self, item_id: str) -> None:
         """Dismiss an assignment — the same "hide" a click on ClassDash's
         own summary page does. `item_id` is whatever id the assignment

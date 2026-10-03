@@ -69,6 +69,7 @@ async def test_check_status_sensors_reflect_platform_health(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 0,
@@ -126,6 +127,7 @@ async def test_done_sensor_main_and_per_class(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -170,6 +172,7 @@ async def test_virtual_reminder_appears_on_class_calendar(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -215,6 +218,7 @@ async def test_done_virtual_reminders_tagged_hidden_ones_excluded(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,
@@ -286,6 +290,7 @@ async def test_virtual_reminder_with_no_class_gets_no_calendar(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 0,
@@ -333,6 +338,7 @@ async def test_virtual_reminders_count_toward_due_soon_overdue_ahead_done(
     bundle = {
         **bundle_extras(),
         "status": {
+            "collecting": False,
             "collectedAt": "2026-09-01T00:00:00.000Z",
             "minutesAgo": 1,
             "classes": 1,

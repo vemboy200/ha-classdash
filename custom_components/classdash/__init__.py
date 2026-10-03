@@ -17,6 +17,7 @@ from .devices import main_device_info, stale_class_devices
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
     Platform.SENSOR,
     Platform.CALENDAR,
     Platform.BUTTON,

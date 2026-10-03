@@ -1,4 +1,4 @@
-"""Tests for the Reload/Check now buttons."""
+"""Tests for the Reload/Check now/Stop check buttons."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from .conftest import bundle_extras
 FAKE_BUNDLE = {
     **bundle_extras(),
     "status": {
+        "collecting": False,
         "collectedAt": "2026-08-30T12:00:00.000Z",
         "minutesAgo": 1,
         "classes": 0,
@@ -106,6 +107,27 @@ async def test_check_button_calls_client(
             "button", "press", {"entity_id": entity_id}, blocking=True
         )
         mock_client_cls.return_value.async_check.assert_called_once()
+
+
+async def test_stop_button_calls_client(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stop = AsyncMock()
+        await _setup_entry(hass, sample_certificate, mock_client_cls)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "button", DOMAIN, "192.168.1.50:8734_stop"
+        )
+        assert entity_id is not None
+
+        await hass.services.async_call(
+            "button", "press", {"entity_id": entity_id}, blocking=True
+        )
+        mock_client_cls.return_value.async_stop.assert_called_once()
 
 
 async def test_reload_button_surfaces_connection_error(

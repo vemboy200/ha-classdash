@@ -35,6 +35,9 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "checking": { "name": "Checking" }
+    },
     "sensor": {
       "due_soon": { "name": "Due soon" },
       "overdue": { "name": "Overdue" },
@@ -43,6 +46,7 @@
       "announcements": { "name": "Announcements" },
       "classes": { "name": "Classes" },
       "last_collected": { "name": "Last collected" },
+      "check_progress": { "name": "Check progress" },
       "check_status_classroom": {
         "name": "Classroom status",
         "state": { "ok": "OK", "fallback": "Fallback", "problem": "Problem", "unknown": "Unknown" }
@@ -61,7 +65,8 @@
     },
     "button": {
       "reload": { "name": "Reload" },
-      "check": { "name": "Check now" }
+      "check": { "name": "Check now" },
+      "stop": { "name": "Stop check" }
     },
     "update": {
       "app_update": { "name": "App update" }

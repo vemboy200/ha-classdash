@@ -1,6 +1,6 @@
-"""Button entities for ClassDash — Reload and Check now, on the main device.
+"""Button entities for ClassDash — Reload, Check now and Stop, on the main device.
 
-Both just start a collection pass and return — CONTRIBUTING.md is explicit
+Reload and Check now just start a collection pass and return — CONTRIBUTING.md is explicit
 that neither endpoint waits for the pass to finish. There's nothing to
 poll for here: the push stream's next "update" event (or "Last collected"
 ticking forward) is how you'd notice it happened, same as pressing the
@@ -32,6 +32,7 @@ async def async_setup_entry(
         [
             ClassDashReloadButton(coordinator, entry),
             ClassDashCheckButton(coordinator, entry),
+            ClassDashStopButton(coordinator, entry),
         ]
     )
 
@@ -90,3 +91,15 @@ class ClassDashCheckButton(_ClassDashActionButton):
 
     async def _async_call(self) -> None:
         await self.coordinator.client.async_check()
+
+
+class ClassDashStopButton(_ClassDashActionButton):
+    _attr_icon = "mdi:stop"
+
+    def __init__(
+        self, coordinator: ClassDashCoordinator, entry: ClassDashConfigEntry
+    ) -> None:
+        super().__init__(coordinator, entry, "stop")
+
+    async def _async_call(self) -> None:
+        await self.coordinator.client.async_stop()

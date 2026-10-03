@@ -61,6 +61,7 @@ def _data(
         check_status={},
         virtual=list(virtual),
         update_status={},
+        collection={},
     )
 
 

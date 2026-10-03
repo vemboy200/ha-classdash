@@ -145,6 +145,18 @@ async def test_async_check_posts_and_returns_nothing(
             assert await client.async_check() is None
 
 
+async def test_async_stop_posts_and_returns_nothing(
+    cert_factory, socket_enabled
+) -> None:
+    app = web.Application()
+    app.router.add_post("/api/stop", _ok)
+
+    async with _running_app(cert_factory, app) as (cert, port):
+        async with ClientSession() as session:
+            client = _client_for(cert, port, session)
+            assert await client.async_stop() is None
+
+
 async def test_async_reload_401_raises_auth_error(cert_factory, socket_enabled) -> None:
     app = web.Application()
     app.router.add_post("/api/reload", _unauthorized)

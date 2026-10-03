@@ -34,7 +34,7 @@ from .conftest import bundle_extras
 def _bundle(due_soon: int) -> dict:
     return {
         **bundle_extras(),
-        "status": {"dueSoon": due_soon, "overdue": 0, "ahead": 0, "done": 0},
+        "status": {"collecting": False, "dueSoon": due_soon, "overdue": 0, "ahead": 0, "done": 0},
         "due-soon": [
             {
                 "id": f"a{i}",
