@@ -23,7 +23,7 @@ is tracked in
 - ClassDash's home API running and reachable (`npm run api`, or the
   settings-panel toggle), with the bearer token and certificate fingerprint
   it prints on startup handy
-- ClassDash v2.4.0 or newer (an older one is missing data this integration reads, and its entities stay unavailable)
+- ClassDash v2.4.0 or newer. With an older one, its entities stay unavailable and a repair issue (Settings → Repairs) says to update it; it clears on its own once the updated ClassDash is running. Dev builds of ClassDash are never flagged
 - Home Assistant 2026.8 or newer
 
 ## Install
@@ -99,6 +99,8 @@ class:
 | Check progress | How far the running check has got, in percent, with `done` and `total` as attributes. Unknown while nothing's running. Disabled by default, since it changes many times during every check; turn it on from the entity's settings if you want it |
 | School today | On on a school day (minimum days included), by the school calendar in ClassDash's Settings → Calendar; unknown without one. Attributes: `day_kind` (`no_school` / `minimum_day`, or none on a normal day), its `label`, today's `events`, and `next_school_day` |
 | Schedule today | Today's A/B or Odd/Even day from ClassDash's Settings → Schedule; unknown when the schedule doesn't rotate or it isn't a school day. Attributes: `schedule_type`, today's `classes` by period, and the `next_school_day` with its label and classes |
+
+The main device's software version is the version of ClassDash it's running, the same as the App update entity's installed version (empty until ClassDash has checked for updates once).
 
 Each assignment in the Due soon / Overdue / Ahead / Done lists has its `id`, `title`, `class`, `due` and `link`, plus `teacher`, `locked` (Canvas work that can't be done yet or any more: `why` is `opens`, `module`, `closed` or `locked`, with `at` and `module` when they apply) and `linked` (for assignments linked in ClassDash, how many parts are `done` out of `total`). Virtual reminders have none of the last three.
 | School calendar | The no-school days, minimum days and events from ClassDash's school calendar, as all-day events. ClassDash only shares the next 14 days, so that's as far ahead as it goes |

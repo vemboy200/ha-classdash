@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -20,12 +21,15 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import ClassDashAuthError, ClassDashClient, ClassDashConnectionError
 from .const import (
+    CLASSDASH_RELEASES_URL,
     DOMAIN,
+    MIN_CLASSDASH_VERSION,
     STREAM_RECONNECT_MAX_SECONDS,
     STREAM_RECONNECT_MIN_SECONDS,
     STREAM_UNAVAILABLE_THRESHOLD_SECONDS,
@@ -242,10 +246,60 @@ def virtual_bucket(item: dict[str, Any], now: datetime) -> str | None:
     return "ahead"
 
 
+class ClassDashTooOldError(Exception):
+    """ClassDash is older than MIN_CLASSDASH_VERSION. `version` is the one
+    it reported, or None when it's too old to report one at all."""
+
+    def __init__(self, version: str | None) -> None:
+        super().__init__(f"ClassDash {version or '(no version)'} is older than {MIN_CLASSDASH_VERSION}")
+        self.version = version
+
+
+# A ClassDash release: plain X.Y.Z. Anything else (a dev build's
+# "2.4.0-11-gc833fbb", say) isn't compared, so working on ClassDash
+# never trips the too-old check.
+_RELEASE_VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+
+def _release_tuple(version: str) -> tuple[int, ...] | None:
+    match = _RELEASE_VERSION.match(version)
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
 def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
     """The stream's top-level keys are each REST handle's path with the
     leading /api/ stripped — so the list endpoints keep their hyphens
-    ("due-soon"), unlike the camelCase keys inside `status` itself."""
+    ("due-soon"), unlike the camelCase keys inside `status` itself.
+
+    Raises ClassDashTooOldError for a ClassDash older than
+    MIN_CLASSDASH_VERSION: by its version, or, when it hasn't got one to
+    go by, by data it doesn't send (v2.3.0 and older: no class
+    `platform`; older still, whole handles missing).
+
+    The version is the app's, as the update entity's installed version:
+    recorded by ClassDash's app (macOS and Windows) at launch, null until
+    its first update check. A dev build's is never compared."""
+    try:
+        version = bundle["update-status"]["currentVersion"]
+    except KeyError as err:
+        raise ClassDashTooOldError(None) from err
+    release = _release_tuple(version) if version else None
+    if release is not None and release < _release_tuple(MIN_CLASSDASH_VERSION):
+        raise ClassDashTooOldError(version)
+    try:
+        for c in bundle["classes"]:
+            c["platform"]
+        return _snapshot(bundle)
+    except KeyError as err:
+        if version:
+            # A release new enough, or a dev build: a bug (here or in
+            # ClassDash), not an old version, so no repair issue. Left
+            # to _listen's catch-all.
+            raise
+        raise ClassDashTooOldError(None) from err
+
+
+def _snapshot(bundle: dict[str, Any]) -> ClassDashData:
     return ClassDashData(
         status=bundle["status"],
         due_soon=bundle["due-soon"],
@@ -377,8 +431,10 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 async for event in self.client.async_stream_updates():
                     backoff = STREAM_RECONNECT_MIN_SECONDS
                     if event.event == "update":
+                        data = _parse_snapshot(event.data)
+                        self._too_old_resolved()
                         self._connected = True
-                        self._push(_parse_snapshot(event.data))
+                        self._push(data)
                     elif event.event == "heartbeat" and self.data is not None:
                         # A freshness signal, not new assignment/announcement
                         # data (CONTRIBUTING.md is explicit about that) — swap
@@ -398,6 +454,13 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
                 self._connected = False
                 self.config_entry.async_start_reauth(self.hass)
                 return
+            except ClassDashTooOldError as err:
+                # Not connected as far as the entities go: they stay
+                # unavailable, and the reconnect attempts carry on, so
+                # updating ClassDash fixes it without a reload.
+                self._connected = False
+                self._too_old(err)
+                self._connection_lost(err, backoff)
             except ClassDashConnectionError as err:
                 _LOGGER.debug(
                     "classdash stream disconnected, retrying in %ss: %s",
@@ -435,6 +498,30 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
             finally:
                 self._backoff_wait = None
             backoff = min(backoff * 2, STREAM_RECONNECT_MAX_SECONDS)
+
+    @property
+    def _too_old_issue_id(self) -> str:
+        return f"classdash_too_old_{self.config_entry.entry_id}"
+
+    def _too_old(self, err: ClassDashTooOldError) -> None:
+        if ir.async_get(self.hass).async_get_issue(DOMAIN, self._too_old_issue_id) is None:
+            _LOGGER.warning("%s; update ClassDash to use it with Home Assistant", err)
+        placeholders = {"minimum": MIN_CLASSDASH_VERSION, "url": CLASSDASH_RELEASES_URL}
+        if err.version is not None:
+            placeholders["version"] = err.version
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._too_old_issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            learn_more_url=CLASSDASH_RELEASES_URL,
+            translation_key="classdash_too_old" if err.version else "classdash_too_old_unknown",
+            translation_placeholders=placeholders,
+        )
+
+    def _too_old_resolved(self) -> None:
+        ir.async_delete_issue(self.hass, DOMAIN, self._too_old_issue_id)
 
     @callback
     def async_reconnect_now(self) -> None:

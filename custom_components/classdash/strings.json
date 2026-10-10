@@ -199,5 +199,15 @@
         }
       }
     }
+  },
+  "issues": {
+    "classdash_too_old": {
+      "title": "ClassDash needs an update",
+      "description": "This ClassDash is version {version}, and the ClassDash integration needs v{minimum} or newer. Its entities stay unavailable until it's updated: get the latest version from {url}, and Home Assistant connects again on its own once it's running."
+    },
+    "classdash_too_old_unknown": {
+      "title": "ClassDash needs an update",
+      "description": "This ClassDash is older than v{minimum}, which the ClassDash integration needs. Its entities stay unavailable until it's updated: get the latest version from {url}, and Home Assistant connects again on its own once it's running."
+    }
   }
 }

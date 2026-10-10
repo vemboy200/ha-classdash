@@ -7,11 +7,12 @@ import aiohttp
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import ClassDashClient, build_ssl_context
-from .const import CONF_CERT_PEM
+from .const import CONF_CERT_PEM, DOMAIN
 from .coordinator import ClassDashConfigEntry, ClassDashCoordinator, class_names
 from .devices import class_device_details, main_device_info, stale_class_devices
 from .services import async_setup_services
@@ -78,6 +79,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
         if coordinator.data is None:
             return
         current = class_names(coordinator.data)
+        # ClassDash's version, the same as the update entity's installed
+        # version (dev builds included); null until ClassDash's first
+        # update check.
+        version = coordinator.data.update_status["currentVersion"]
+        main = device_reg.async_get(coordinator.main_device_id)
+        if main.sw_version != version:
+            device_reg.async_update_device(main.id, sw_version=version)
         # Device info is only read from an entity when it's added, so a
         # teacher or link that changes later is kept up to date here.
         for device in dr.async_entries_for_config_entry(device_reg, entry.entry_id):
@@ -104,3 +112,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
 async def async_unload_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) -> None:
+    """Don't leave a too-old repair issue behind for an entry that's gone."""
+    ir.async_delete_issue(hass, DOMAIN, f"classdash_too_old_{entry.entry_id}")

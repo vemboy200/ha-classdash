@@ -160,8 +160,8 @@ rules:
       entries, not the one being reconfigured (matching yourself on an
       unchanged host/port must not abort).
   repair-issues:
-    status: exempt
-    comment: No actionable repair scenario currently identified.
+    status: done
+    comment: One for a ClassDash too old for this integration, cleared once an updated one connects.
   stale-devices: done
 
   # Platinum

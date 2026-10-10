@@ -7,6 +7,11 @@ DEFAULT_PORT = 8734
 CONF_CERT_PEM = "cert_pem"
 CONF_FINGERPRINT = "fingerprint"
 
+# The oldest ClassDash release this version reads everything it needs from.
+# Older ones get a repair issue (see coordinator.py) instead of entities.
+MIN_CLASSDASH_VERSION = "2.4.0"
+CLASSDASH_RELEASES_URL = "https://github.com/vemboy200/ClassDash/releases"
+
 # Attribute lists are capped so a busy class list doesn't blow past the
 # recorder's per-attribute size warning threshold.
 MAX_LIST_ATTRIBUTES = 10
