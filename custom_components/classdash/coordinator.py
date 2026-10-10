@@ -301,6 +301,26 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
         raise ClassDashTooOldError(None) from err
 
 
+def _link_virtual(
+    virtual: list[dict[str, Any]], classes: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Virtual reminders under their linked class's name, like every
+    other list. ClassDash's /api/virtual (v2.5.0) leaves a reminder made
+    before its class was linked under the class's own name, which would
+    otherwise get a device of its own, named like the link. `sourceClass`
+    keeps the real one, as it does on real assignments."""
+    link_names = {
+        member: c["name"]
+        for c in classes
+        if len(c["classes"]) > 1
+        for member in c["classes"]
+    }
+    return [
+        {**x, "class": link_names[x["class"]]} if x.get("class") in link_names else x
+        for x in virtual
+    ]
+
+
 def _snapshot(bundle: dict[str, Any]) -> ClassDashData:
     return ClassDashData(
         status=bundle["status"],
@@ -311,7 +331,7 @@ def _snapshot(bundle: dict[str, Any]) -> ClassDashData:
         announcements=bundle["announcements"],
         classes=bundle["classes"],
         check_status=bundle["check-status"],
-        virtual=bundle["virtual"],
+        virtual=_link_virtual(bundle["virtual"], bundle["classes"]),
         update_status=bundle["update-status"],
         collection=bundle["collection"],
         calendar=bundle["calendar"],

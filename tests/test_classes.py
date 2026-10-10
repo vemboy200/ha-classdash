@@ -739,3 +739,39 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_virtual_reminder_follows_its_class_link(
+    hass: HomeAssistant, sample_certificate
+) -> None:
+    """A reminder ClassDash still has under a linked class's own name
+    counts toward the link's device, not a device of its own."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+    due = (dt_util.now() + timedelta(days=2)).isoformat()
+    bundle = _bundle(
+        classes=[
+            {"name": "Physics", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics", "PHYS 101"], "platform": ["Google Classroom", "Q"], "grade": None},
+        ],
+        virtual=[{**_assignment("PHYS 101", "Bring goggles", due, "v-1"), "sourceClass": "PHYS 101"}],
+    )
+
+    async def fake_stream():
+        yield StreamEvent("update", bundle)
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        dev_reg = dr.async_get(hass)
+        assert _device(dev_reg, entry, class_unique_id(entry, "PHYS 101")) is None
+        state = hass.states.get("sensor.physics_due_soon")
+        assert state.state == "1"
+        assert state.attributes["assignments"][0]["class"] == "Physics"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
