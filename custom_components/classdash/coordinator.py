@@ -386,6 +386,9 @@ class ClassDashCoordinator(DataUpdateCoordinator[ClassDashData]):
         # "have I added this one yet" answer, not each other's.
         self.known_class_sensors: set[str] = set()
         self.known_class_calendars: set[str] = set()
+        # A class's Grade sensor is only added once it has a grade, so it
+        # can come later than the class's other sensors.
+        self.known_grade_sensors: set[str] = set()
 
     @callback
     def async_start(self) -> asyncio.Task[None]:

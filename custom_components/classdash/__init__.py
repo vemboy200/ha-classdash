@@ -102,6 +102,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClassDashConfigEntry) ->
             # ClassDashCoordinator.known_class_sensors' own docstring.
             coordinator.known_class_sensors.discard(class_name)
             coordinator.known_class_calendars.discard(class_name)
+            coordinator.known_grade_sensors.discard(class_name)
 
     _sync_class_devices()
     entry.async_on_unload(coordinator.async_add_listener(_sync_class_devices))

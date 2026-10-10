@@ -13,11 +13,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import MAX_LIST_ATTRIBUTES
+from .const import DOMAIN, MAX_LIST_ATTRIBUTES
 from .coordinator import (
     ClassDashConfigEntry,
     ClassDashCoordinator,
@@ -289,7 +290,8 @@ async def async_setup_entry(
     @callback
     def _add_new_class_sensors() -> None:
         """Give any class that doesn't already have sensors its count
-        sensors and its grade sensor. Tracked via coordinator.known_class_sensors — a
+        sensors, and any class with a grade its Grade sensor (removing
+        it again when the grade goes away). Tracked via coordinator.known_class_sensors — a
         fresh, process-local set, not the entity registry — see that
         attribute's own docstring for why: the registry persists a
         class's entities across a restart even though the actual Entity
@@ -300,10 +302,30 @@ async def async_setup_entry(
         reappears later still gets re-added correctly."""
         if coordinator.data is None:
             return
-        new = class_names(coordinator.data) - coordinator.known_class_sensors
-        if not new:
+        current = class_names(coordinator.data)
+        new = current - coordinator.known_class_sensors
+        # A Grade sensor only for a class that has a grade, so not every
+        # class without one has a sensor stuck at unknown. One whose grade
+        # goes away is removed; its long-term statistics stay until
+        # deleted in Developer tools, and carry on if the grade returns.
+        graded = {
+            c["name"]
+            for c in coordinator.data.classes
+            if (grade := c["grade"])
+            and (grade["percent"] is not None or grade["estimate"] is not None)
+        } & current
+        new_graded = graded - coordinator.known_grade_sensors
+        ent_reg = er.async_get(hass)
+        for name in (coordinator.known_grade_sensors & current) - graded:
+            coordinator.known_grade_sensors.discard(name)
+            if entity_id := ent_reg.async_get_entity_id(
+                "sensor", DOMAIN, f"{class_unique_id(entry, name)}_grade"
+            ):
+                ent_reg.async_remove(entity_id)
+        if not new and not new_graded:
             return
         coordinator.known_class_sensors |= new
+        coordinator.known_grade_sensors |= new_graded
         async_add_entities(
             [
                 *(
@@ -311,7 +333,10 @@ async def async_setup_entry(
                     for name in sorted(new)
                     for key in CLASS_SENSOR_ICONS
                 ),
-                *(ClassDashGradeSensor(coordinator, entry, name) for name in sorted(new)),
+                *(
+                    ClassDashGradeSensor(coordinator, entry, name)
+                    for name in sorted(new_graded)
+                ),
             ]
         )
 
@@ -402,8 +427,8 @@ class ClassDashGradeSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
 
     From /api/classes' `grade`: the one the class goes by (Q's, then
     Canvas's, then Classroom's). With no percent but an estimate, the
-    estimate, with a disclaimer as the attribution. Unknown for a class
-    without either, like an Edpuzzle-only class.
+    estimate, with a disclaimer as the attribution. Only there while the
+    class has a grade.
     """
 
     _attr_has_entity_name = True

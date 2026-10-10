@@ -690,23 +690,23 @@ async def test_assignment_details_in_attributes_and_calendar(
 async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> None:
     """Each class has a Grade sensor: the percent it goes by, recorded as
     a measurement for graphs, ClassDash's estimate (with a disclaimer)
-    when there's no percent yet, unknown for a class with neither, and
-    following a later push."""
+    when there's no percent yet, only there while the class has a grade,
+    and following a later push."""
     entry = _make_entry(sample_certificate)
     entry.add_to_hass(hass)
 
-    def roster(percent):
+    def roster(percent, art=None, chemistry=True):
         return [
             {
                 "name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known",
                 "teacher": None, "classes": ["Physics"], "platform": "Canvas",
                 "grade": {"source": "q", "letter": "A-", "percent": percent, "estimate": 92.1, "term": "S1", "checkedAt": "2026-10-10T12:00:00.000Z"},
             },
-            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": None},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": art},
             {
                 "name": "Chemistry", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known",
                 "teacher": None, "classes": ["Chemistry"], "platform": "Canvas",
-                "grade": {"source": "canvas", "letter": None, "percent": None, "estimate": 85.2, "term": None, "checkedAt": "2026-10-10T12:00:00.000Z"},
+                "grade": {"source": "canvas", "letter": None, "percent": None, "estimate": 85.2, "term": None, "checkedAt": "2026-10-10T12:00:00.000Z"} if chemistry else None,
             },
         ]
 
@@ -716,7 +716,10 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
     async def fake_stream():
         yield StreamEvent("update", _bundle(due_soon=due_soon, classes=roster(91.5)))
         await step.wait()
-        yield StreamEvent("update", _bundle(due_soon=due_soon, classes=roster(88)))
+        yield StreamEvent(
+            "update",
+            _bundle(due_soon=due_soon, classes=roster(88, chemistry=False, art={"source": "classroom", "letter": None, "percent": 97, "estimate": None, "term": None, "checkedAt": "2026-10-10T12:00:00.000Z"})),
+        )
         await asyncio.Event().wait()
 
     with patch(
@@ -736,7 +739,8 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
         assert state.attributes["source"] == "q"
         assert "checked_at" not in state.attributes
         assert "attribution" not in state.attributes
-        assert hass.states.get("sensor.art_history_grade").state == "unknown"
+        # No grade: no Grade sensor, until it has one.
+        assert hass.states.get("sensor.art_history_grade") is None
         # No real grade yet: the estimate, saying so.
         chemistry = hass.states.get("sensor.chemistry_grade")
         assert chemistry.state == "85.2"
@@ -747,6 +751,10 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
             while hass.states.get("sensor.physics_grade").state == "91.5":
                 await asyncio.sleep(0)
         assert hass.states.get("sensor.physics_grade").state == "88"
+        assert hass.states.get("sensor.art_history_grade").state == "97"
+        # Its grade gone: removed.
+        assert hass.states.get("sensor.chemistry_grade") is None
+        assert er.async_get(hass).async_get("sensor.chemistry_grade") is None
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
