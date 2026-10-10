@@ -273,8 +273,9 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
 
     Raises ClassDashTooOldError for a ClassDash older than
     MIN_CLASSDASH_VERSION: by its version, or, when it hasn't got one to
-    go by, by data it doesn't send (v2.3.0 and older: no class
-    `platform`; older still, whole handles missing).
+    go by, by data it doesn't send (v2.4.x: no class `grade`; v2.3.0
+    and older: no class `platform` either; older still, whole handles
+    missing).
 
     The version is the app's, as the update entity's installed version:
     recorded by ClassDash's app (macOS and Windows) at launch, null until
@@ -289,6 +290,7 @@ def _parse_snapshot(bundle: dict[str, Any]) -> ClassDashData:
     try:
         for c in bundle["classes"]:
             c["platform"]
+            c["grade"]
         return _snapshot(bundle)
     except KeyError as err:
         if version:

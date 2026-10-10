@@ -207,8 +207,8 @@ async def test_class_with_nothing_due_still_gets_a_device(
     bundle = _bundle(
         due_soon=[_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")],
         classes=[
-            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas"},
-            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom"},
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas", "grade": None},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": None},
         ],
     )
 
@@ -255,7 +255,7 @@ async def test_orphaned_class_gets_no_device_even_with_lingering_items(
         due_soon=[_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")],
         overdue=[_assignment("Old Class", "Ancient worksheet", "2020-01-01T00:00:00+00:00", "o1")],
         classes=[
-            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas"},
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas", "grade": None},
             {
                 "name": "Old Class",
                 "dueSoon": 0,
@@ -265,6 +265,7 @@ async def test_orphaned_class_gets_no_device_even_with_lingering_items(
                 "teacher": None,
                 "classes": ["Old Class"],
                 "platform": None,
+                "grade": None,
             },
         ],
     )
@@ -587,8 +588,8 @@ async def test_class_device_shows_teacher_and_linked(
 
     def roster(teacher, members):
         return [
-            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": teacher, "classes": members, "platform": "Canvas" if len(members) == 1 else ["Canvas", "Google Classroom"]},
-            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom"},
+            {"name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known", "teacher": teacher, "classes": members, "platform": "Canvas" if len(members) == 1 else ["Canvas", "Google Classroom"], "grade": None},
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": None},
         ]
 
     due_soon = [_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")]
@@ -681,6 +682,60 @@ async def test_assignment_details_in_attributes_and_calendar(
         assert hass.states.get(calendar_id).attributes["description"] == (
             "Teacher: Ms. Frizzle\nLinked: 1 of 2 parts done"
         )
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> None:
+    """Each class has a Grade sensor: the percent it goes by, recorded as
+    a measurement for graphs, unknown for a class without a grade, and
+    following a later push."""
+    entry = _make_entry(sample_certificate)
+    entry.add_to_hass(hass)
+
+    def roster(percent):
+        return [
+            {
+                "name": "Physics", "dueSoon": 1, "ahead": 0, "overdue": 0, "status": "known",
+                "teacher": None, "classes": ["Physics"], "platform": "Canvas",
+                "grade": {"source": "q", "letter": "A-", "percent": percent, "estimate": 92.1, "term": "S1", "checkedAt": "2026-10-10T12:00:00.000Z"},
+            },
+            {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": None},
+        ]
+
+    due_soon = [_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")]
+    step = asyncio.Event()
+
+    async def fake_stream():
+        yield StreamEvent("update", _bundle(due_soon=due_soon, classes=roster(91.5)))
+        await step.wait()
+        yield StreamEvent("update", _bundle(due_soon=due_soon, classes=roster(88)))
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.classdash.ClassDashClient", autospec=True
+    ) as mock_client_cls:
+        mock_client_cls.return_value.async_stream_updates = fake_stream
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        state = hass.states.get("sensor.physics_grade")
+        assert state.state == "91.5"
+        assert state.attributes["unit_of_measurement"] == "%"
+        assert state.attributes["state_class"] == "measurement"
+        assert state.attributes["letter"] == "A-"
+        assert state.attributes["estimate"] == 92.1
+        assert state.attributes["term"] == "S1"
+        assert state.attributes["source"] == "q"
+        assert "checked_at" not in state.attributes
+        assert hass.states.get("sensor.art_history_grade").state == "unknown"
+
+        step.set()
+        async with asyncio.timeout(2):
+            while hass.states.get("sensor.physics_grade").state == "91.5":
+                await asyncio.sleep(0)
+        assert hass.states.get("sensor.physics_grade").state == "88"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

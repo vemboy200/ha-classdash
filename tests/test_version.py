@@ -34,13 +34,13 @@ STATUS = {
     "schoolToday": None,
     "scheduleToday": None,
 }
-PHYSICS = {"name": "Physics", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas"}
+PHYSICS = {"name": "Physics", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Physics"], "platform": "Canvas", "grade": None}
 
 
-def _bundle(version: str | None = "2.5.0", platform: bool = True) -> dict:
+def _bundle(version: str | None = "2.5.0", grade: bool = True) -> dict:
     physics = dict(PHYSICS)
-    if not platform:
-        del physics["platform"]
+    if not grade:
+        del physics["grade"]
     return {
         **bundle_extras(),
         "update-status": {**default_update_status(), "currentVersion": version},
@@ -116,10 +116,10 @@ async def test_software_version_on_the_main_device(hass: HomeAssistant, entry) -
     ("old", "translation_key", "placeholders"),
     [
         # An older release.
-        (_bundle("2.3.9"), "classdash_too_old", {"version": "2.3.9"}),
+        (_bundle("2.4.9"), "classdash_too_old", {"version": "2.4.9"}),
         # No version to go by (never checked for updates), and no class
-        # platform: ClassDash v2.3.0 or older.
-        (_bundle(None, platform=False), "classdash_too_old_unknown", {}),
+        # grade: ClassDash v2.4.x or older.
+        (_bundle(None, grade=False), "classdash_too_old_unknown", {}),
     ],
 )
 async def test_too_old_classdash_raises_an_issue_until_updated(
@@ -149,7 +149,7 @@ async def test_too_old_classdash_raises_an_issue_until_updated(
         issue = _issue(hass, entry)
         assert issue.translation_key == translation_key
         assert issue.translation_placeholders == {
-            "minimum": "2.4.0",
+            "minimum": "2.5.0",
             "url": "https://github.com/vemboy200/ClassDash/releases",
             **placeholders,
         }
@@ -164,7 +164,7 @@ async def test_too_old_classdash_raises_an_issue_until_updated(
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-@pytest.mark.parametrize("version", ["2.3.0-11-gc833fbb", "2.4.0-dev", "dev"])
+@pytest.mark.parametrize("version", ["2.3.0-11-gc833fbb", "2.5.0-dev", "dev"])
 async def test_dev_builds_are_never_too_old(hass: HomeAssistant, entry, version: str) -> None:
     async def stream():
         yield StreamEvent("update", _bundle(version))
@@ -202,7 +202,7 @@ async def test_no_version_but_new_enough_data_still_works(hass: HomeAssistant, e
 
 async def test_removing_the_entry_removes_its_issue(hass: HomeAssistant, entry) -> None:
     async def stream():
-        yield StreamEvent("update", _bundle("2.3.9"))
+        yield StreamEvent("update", _bundle("2.4.9"))
         await asyncio.Event().wait()
 
     with (
@@ -225,7 +225,7 @@ async def test_a_dev_build_missing_data_is_not_called_too_old(
     """Dev builds are never flagged: missing data from one is a bug, not
     an old version, and only gets logged."""
     async def stream():
-        yield StreamEvent("update", _bundle("2.3.0-11-gc833fbb", platform=False))
+        yield StreamEvent("update", _bundle("2.3.0-11-gc833fbb", grade=False))
         await asyncio.Event().wait()
 
     with (

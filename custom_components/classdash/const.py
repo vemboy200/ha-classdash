@@ -9,7 +9,7 @@ CONF_FINGERPRINT = "fingerprint"
 
 # The oldest ClassDash release this version reads everything it needs from.
 # Older ones get a repair issue (see coordinator.py) instead of entities.
-MIN_CLASSDASH_VERSION = "2.4.0"
+MIN_CLASSDASH_VERSION = "2.5.0"
 CLASSDASH_RELEASES_URL = "https://github.com/vemboy200/ClassDash/releases"
 
 # Attribute lists are capped so a busy class list doesn't blow past the

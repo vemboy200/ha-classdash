@@ -84,9 +84,9 @@ async def test_reflects_available_update(
     hass: HomeAssistant, sample_certificate
 ) -> None:
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.5.0",
-        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.6.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
         "status": "available",
@@ -99,11 +99,11 @@ async def test_reflects_available_update(
         state = hass.states.get(_entity_id(hass))
 
     assert state.state == "on"
-    assert state.attributes["installed_version"] == "2.4.0"
-    assert state.attributes["latest_version"] == "2.5.0"
+    assert state.attributes["installed_version"] == "2.5.0"
+    assert state.attributes["latest_version"] == "2.6.0"
     assert (
         state.attributes["release_url"]
-        == "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0"
+        == "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0"
     )
     assert state.attributes["in_progress"] is False
     assert state.attributes["status"] == "available"
@@ -124,13 +124,13 @@ async def test_reflects_downloaded_but_not_installed(
     triggers or watches a download, ClassDash's own check/download cycle
     is what gets this here."""
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.5.0",
-        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.6.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
         "status": "ready",
-        "downloadedVersion": "2.5.0",
+        "downloadedVersion": "2.6.0",
         "readyToInstall": True,
     }
     with patch(
@@ -140,7 +140,7 @@ async def test_reflects_downloaded_but_not_installed(
         state = hass.states.get(_entity_id(hass))
 
     assert state.attributes["status"] == "ready"
-    assert state.attributes["downloaded_version"] == "2.5.0"
+    assert state.attributes["downloaded_version"] == "2.6.0"
     assert state.attributes["ready_to_install"] is True
     assert state.attributes["in_progress"] is False
 
@@ -161,8 +161,8 @@ async def test_no_check_run_yet_is_unknown(
 
 async def test_up_to_date_is_off(hass: HomeAssistant, sample_certificate) -> None:
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.4.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.5.0",
         "url": None,
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": False,
@@ -184,8 +184,8 @@ def _get_entity(hass: HomeAssistant, entity_id: str):
 
 def test_parse_github_release_url_extracts_owner_repo_tag() -> None:
     assert _parse_github_release_url(
-        "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0"
-    ) == ("vemboy200", "ClassDash", "v2.5.0")
+        "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0"
+    ) == ("vemboy200", "ClassDash", "v2.6.0")
 
 
 @pytest.mark.parametrize(
@@ -193,7 +193,7 @@ def test_parse_github_release_url_extracts_owner_repo_tag() -> None:
     [
         "https://github.com/vemboy200/ClassDash",
         "https://github.com/vemboy200/ClassDash/releases",
-        "https://example.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "https://example.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "not a url at all",
     ],
 )
@@ -205,14 +205,14 @@ async def test_release_notes_fetches_github_release_body(
     hass: HomeAssistant, sample_certificate, aioclient_mock
 ) -> None:
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.5.0",
-        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.6.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
     }
     aioclient_mock.get(
-        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.5.0",
+        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.6.0",
         json={"body": "## What's new\n- Fixed a bug"},
     )
 
@@ -250,14 +250,14 @@ async def test_release_notes_none_on_404(
     last checked — a 404 here shouldn't be treated as an integration
     error, just "no notes to show"."""
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.5.0",
-        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.6.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
     }
     aioclient_mock.get(
-        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.5.0",
+        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.6.0",
         status=404,
     )
 
@@ -275,14 +275,14 @@ async def test_release_notes_none_on_connection_error(
     hass: HomeAssistant, sample_certificate, aioclient_mock
 ) -> None:
     status = {
-        "currentVersion": "2.4.0",
-        "latestVersion": "2.5.0",
-        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.5.0",
+        "currentVersion": "2.5.0",
+        "latestVersion": "2.6.0",
+        "url": "https://github.com/vemboy200/ClassDash/releases/tag/v2.6.0",
         "checkedAt": "2026-09-01T00:00:00.000Z",
         "updateAvailable": True,
     }
     aioclient_mock.get(
-        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.5.0",
+        "https://api.github.com/repos/vemboy200/ClassDash/releases/tags/v2.6.0",
         exc=aiohttp.ClientConnectionError("refused"),
     )
 

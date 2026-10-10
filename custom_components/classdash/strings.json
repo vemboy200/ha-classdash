@@ -46,6 +46,7 @@
       "overdue": { "name": "Overdue" },
       "ahead": { "name": "Ahead" },
       "done": { "name": "Done" },
+      "grade": { "name": "Grade" },
       "announcements": { "name": "Announcements" },
       "classes": { "name": "Classes" },
       "last_collected": { "name": "Last collected" },

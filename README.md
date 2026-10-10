@@ -23,7 +23,7 @@ is tracked in
 - ClassDash's home API running and reachable (`npm run api`, or the
   settings-panel toggle), with the bearer token and certificate fingerprint
   it prints on startup handy
-- ClassDash v2.4.0 or newer. With an older one, its entities stay unavailable and a repair issue (Settings → Repairs) says to update it; it clears on its own once the updated ClassDash is running. Dev builds of ClassDash are never flagged
+- ClassDash v2.5.0 or newer. With an older one, its entities stay unavailable and a repair issue (Settings → Repairs) says to update it; it clears on its own once the updated ClassDash is running. Dev builds of ClassDash are never flagged
 - Home Assistant 2026.8 or newer
 
 ## Install
@@ -131,6 +131,7 @@ Each class device's info shows its teacher ("Class by <teacher>", or "by ClassDa
 | Entity | What it is |
 |---|---|
 | Due soon / Overdue / Ahead / Done | That class's own counts, same attribute pattern as the main device — including any virtual reminder assigned to this class, bucketed by due date/done state the same way a real assignment already is |
+| Grade | The class's grade as a percent, recorded for history graphs and long-term statistics, with its `letter`, `estimate` (worked out from category weights, so it can differ), `term` and `source` (`q`, `canvas` or `classroom`) as attributes. The grade ClassDash goes by: Q's first, then Canvas's, then Classroom's; a Q class only counts once it's linked to the class in ClassDash's Settings → Classes. Unknown for a class without a grade |
 | Assignments (calendar) | That class's due-soon + ahead + overdue + done assignments, plus any virtual reminder assigned to it, as calendar events — each due date/time becomes a 30-minute event. An overdue item's title gets an "(overdue)" tag, and a done one gets "(done)" — e.g. "Lab report (overdue)" — since due-soon/ahead don't need one (the due date alone already says when those are), but overdue is worth calling out plainly, and done would otherwise look identical to an undone item sharing the same due date. A virtual reminder gets the same tags: "(done)" if marked done, "(overdue)" if its due date has passed. Overdue/done items don't show up as the calendar's "next" event, they're just present when the range covers them. Each event's description has the same details as a to-do item |
 
 A virtual reminder due within a week counts as "due soon", further out

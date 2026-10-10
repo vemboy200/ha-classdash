@@ -288,8 +288,8 @@ async def async_setup_entry(
 
     @callback
     def _add_new_class_sensors() -> None:
-        """Give any class that doesn't already have sensors its three
-        count sensors. Tracked via coordinator.known_class_sensors — a
+        """Give any class that doesn't already have sensors its count
+        sensors and its grade sensor. Tracked via coordinator.known_class_sensors — a
         fresh, process-local set, not the entity registry — see that
         attribute's own docstring for why: the registry persists a
         class's entities across a restart even though the actual Entity
@@ -305,9 +305,14 @@ async def async_setup_entry(
             return
         coordinator.known_class_sensors |= new
         async_add_entities(
-            ClassDashClassSensor(coordinator, entry, name, key)
-            for name in sorted(new)
-            for key in CLASS_SENSOR_ICONS
+            [
+                *(
+                    ClassDashClassSensor(coordinator, entry, name, key)
+                    for name in sorted(new)
+                    for key in CLASS_SENSOR_ICONS
+                ),
+                *(ClassDashGradeSensor(coordinator, entry, name) for name in sorted(new)),
+            ]
         )
 
     _add_new_class_sensors()
@@ -382,3 +387,56 @@ class ClassDashClassSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return _assignment_attrs(self._items())
+
+
+class ClassDashGradeSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
+    """One class's grade as a percent, on its sub-device, for graphing.
+
+    From /api/classes' `grade`: the one the class goes by (Q's, then
+    Canvas's, then Classroom's). Unknown for a class without one, like an
+    unlinked Q class's Classroom class or an Edpuzzle-only class.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "grade"
+    _attr_icon = "mdi:school"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = "measurement"
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: ClassDashCoordinator,
+        entry: ClassDashConfigEntry,
+        class_name: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._class_name = class_name
+        self._attr_unique_id = f"{class_unique_id(entry, class_name)}_grade"
+        self._attr_device_info = class_device_info(entry, class_name)
+
+    def _grade(self) -> dict[str, Any] | None:
+        # A class only in announcements isn't on /api/classes at all.
+        roster = next(
+            (c for c in self.coordinator.data.classes if c["name"] == self._class_name),
+            None,
+        )
+        return roster["grade"] if roster else None
+
+    @property
+    def native_value(self) -> float | None:
+        grade = self._grade()
+        return grade["percent"] if grade else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        grade = self._grade() or {}
+        return {
+            "letter": grade.get("letter"),
+            # Worked out from category weights; can differ from percent.
+            "estimate": grade.get("estimate"),
+            "term": grade.get("term"),
+            # Not checkedAt: Canvas's changes on every check, which
+            # would record a new state for nothing every few minutes.
+            "source": grade.get("source"),
+        }
