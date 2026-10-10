@@ -283,10 +283,12 @@ async def test_reauth_updates_token(
     assert entry.data[CONF_CERT_PEM] == sample_certificate.pem
 
 
-def _discovery(host: str = "192.168.1.60", port: int = 8734, fp: str = "") -> ZeroconfServiceInfo:
+def _discovery(
+    host: str = "192.168.1.60", port: int = 8734, fp: str = "", also: tuple[str, ...] = ()
+) -> ZeroconfServiceInfo:
     return ZeroconfServiceInfo(
         ip_address=ip_address(host),
-        ip_addresses=[ip_address(host)],
+        ip_addresses=[ip_address(host), *(ip_address(a) for a in also)],
         hostname="classdash-laptop.local.",
         name="ClassDash on Laptop._classdash._tcp.local.",
         port=port,
@@ -400,3 +402,29 @@ async def test_zeroconf_for_another_certificate_is_a_new_classdash(
     )
     assert result["step_id"] == "confirm"
     assert entry.data["host"] == "192.168.1.50"
+
+
+async def test_zeroconf_with_the_entrys_address_second_is_not_a_move(
+    hass: HomeAssistant, sample_certificate, mock_setup_entry
+) -> None:
+    """A computer on two networks announces both addresses, in no fixed
+    order: the entry's being second isn't a move, so no rewrite or reload."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="192.168.1.50:8734",
+        data={**USER_INPUT, **TOKEN_INPUT, CONF_CERT_PEM: sample_certificate.pem},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_discovery(
+            "192.168.1.60", 8734, fp=sample_certificate.fingerprint, also=("192.168.1.50",)
+        ),
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == "192.168.1.50"
+    assert mock_setup_entry.call_count == 0

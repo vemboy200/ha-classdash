@@ -128,10 +128,14 @@ class ClassDashConfigFlow(ConfigFlow, domain=DOMAIN):
         host = discovery_info.host
         port = discovery_info.port
         announced_fingerprint = discovery_info.properties.get("fp")
+        # A computer on more than one network (Wi-Fi and Ethernet, say)
+        # announces every address it has, and which comes first can vary:
+        # still at its address as long as the entry's is any of them.
+        announced_hosts = {str(ip) for ip in discovery_info.ip_addresses}
         for entry in self._async_current_entries(include_ignore=False):
             if fingerprint_from_pem(entry.data[CONF_CERT_PEM]) != announced_fingerprint:
                 continue
-            if (entry.data[CONF_HOST], entry.data[CONF_PORT]) != (host, port):
+            if entry.data[CONF_HOST] not in announced_hosts or entry.data[CONF_PORT] != port:
                 self.hass.config_entries.async_update_entry(
                     entry, data={**entry.data, CONF_HOST: host, CONF_PORT: port}
                 )
