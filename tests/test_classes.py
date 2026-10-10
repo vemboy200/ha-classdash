@@ -689,7 +689,8 @@ async def test_assignment_details_in_attributes_and_calendar(
 
 async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> None:
     """Each class has a Grade sensor: the percent it goes by, recorded as
-    a measurement for graphs, unknown for a class without a grade, and
+    a measurement for graphs, ClassDash's estimate (with a disclaimer)
+    when there's no percent yet, unknown for a class with neither, and
     following a later push."""
     entry = _make_entry(sample_certificate)
     entry.add_to_hass(hass)
@@ -702,6 +703,11 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
                 "grade": {"source": "q", "letter": "A-", "percent": percent, "estimate": 92.1, "term": "S1", "checkedAt": "2026-10-10T12:00:00.000Z"},
             },
             {"name": "Art History", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known", "teacher": None, "classes": ["Art History"], "platform": "Google Classroom", "grade": None},
+            {
+                "name": "Chemistry", "dueSoon": 0, "ahead": 0, "overdue": 0, "status": "known",
+                "teacher": None, "classes": ["Chemistry"], "platform": "Canvas",
+                "grade": {"source": "canvas", "letter": None, "percent": None, "estimate": 85.2, "term": None, "checkedAt": "2026-10-10T12:00:00.000Z"},
+            },
         ]
 
     due_soon = [_assignment("Physics", "Lab report", "2026-10-10T23:59:00+00:00", "p1")]
@@ -729,7 +735,12 @@ async def test_class_grade_sensor(hass: HomeAssistant, sample_certificate) -> No
         assert state.attributes["term"] == "S1"
         assert state.attributes["source"] == "q"
         assert "checked_at" not in state.attributes
+        assert "attribution" not in state.attributes
         assert hass.states.get("sensor.art_history_grade").state == "unknown"
+        # No real grade yet: the estimate, saying so.
+        chemistry = hass.states.get("sensor.chemistry_grade")
+        assert chemistry.state == "85.2"
+        assert chemistry.attributes["attribution"].startswith("Estimated by ClassDash")
 
         step.set()
         async with asyncio.timeout(2):

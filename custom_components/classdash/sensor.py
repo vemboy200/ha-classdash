@@ -389,12 +389,21 @@ class ClassDashClassSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
         return _assignment_attrs(self._items())
 
 
+# Shown, as the entity's attribution, while a Grade sensor's state is
+# ClassDash's estimate instead of a real grade.
+ESTIMATE_DISCLAIMER = (
+    "Estimated by ClassDash from the class's category weights, not a real "
+    "grade from the school"
+)
+
+
 class ClassDashGradeSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity):
     """One class's grade as a percent, on its sub-device, for graphing.
 
     From /api/classes' `grade`: the one the class goes by (Q's, then
-    Canvas's, then Classroom's). Unknown for a class without one, like an
-    unlinked Q class's Classroom class or an Edpuzzle-only class.
+    Canvas's, then Classroom's). With no percent but an estimate, the
+    estimate, with a disclaimer as the attribution. Unknown for a class
+    without either, like an Edpuzzle-only class.
     """
 
     _attr_has_entity_name = True
@@ -423,10 +432,23 @@ class ClassDashGradeSensor(CoordinatorEntity[ClassDashCoordinator], SensorEntity
         )
         return roster["grade"] if roster else None
 
+    def _estimated(self) -> bool:
+        """No real percent yet, but ClassDash has worked one out."""
+        grade = self._grade()
+        return bool(grade) and grade["percent"] is None and grade["estimate"] is not None
+
     @property
     def native_value(self) -> float | None:
         grade = self._grade()
-        return grade["percent"] if grade else None
+        if not grade:
+            return None
+        return grade["estimate"] if self._estimated() else grade["percent"]
+
+    @property
+    def attribution(self) -> str | None:
+        if self._estimated():
+            return ESTIMATE_DISCLAIMER
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
